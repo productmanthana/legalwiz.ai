@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "FINTRACE"
+description = "FINTRACE is a financial investigation and legal intelligence platform for Karnataka Lokayukta disproportionate-assets cases and Income Tax scrutiny. Accused persons, advocates and CAs organise bank statements, transactions, reconciliation, income/expenditure, assets, family profiles and query responses; authorised investigation officers review shared cases."
+version = "1.0.0"
+id = "artifacts/fintrace"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22819
+
+[services.development]
+run = "pnpm --filter @workspace/fintrace run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/fintrace", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/fintrace/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22819"
+BASE_PATH = "/"

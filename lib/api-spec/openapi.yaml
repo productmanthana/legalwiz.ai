@@ -1,0 +1,2179 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: FINTRACE API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+  - name: me
+  - name: dashboard
+  - name: cases
+  - name: accounts
+  - name: transactions
+  - name: reconciliation
+  - name: schedules
+  - name: assets
+  - name: family
+  - name: queries
+  - name: documents
+  - name: legal
+  - name: assistant
+  - name: reports
+  - name: audit
+  - name: Storage
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /me:
+    get:
+      operationId: getMe
+      tags: [me]
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserProfile" }
+    patch:
+      operationId: updateMe
+      tags: [me]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserProfileUpdate" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserProfile" }
+
+  /service-status:
+    get:
+      operationId: getServiceStatus
+      tags: [me]
+      responses:
+        "200":
+          description: External services availability
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ServiceStatus" }
+
+  /demo/seed:
+    post:
+      operationId: seedDemoCase
+      tags: [cases]
+      summary: Create a clearly labelled demo case with sample data for the current user
+      responses:
+        "201":
+          description: Demo case created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Case" }
+
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DashboardSummary" }
+  /dashboard/financial-overview:
+    get:
+      operationId: getFinancialOverview
+      tags: [dashboard]
+      responses:
+        "200":
+          description: Credits/debits by financial year across accessible cases
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/FinancialYearTotal" }
+  /dashboard/activity:
+    get:
+      operationId: getRecentActivity
+      tags: [dashboard]
+      responses:
+        "200":
+          description: Recent audit activity
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AuditLog" }
+  /dashboard/deadlines:
+    get:
+      operationId: getUpcomingDeadlines
+      tags: [dashboard]
+      responses:
+        "200":
+          description: Upcoming response and submission deadlines
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Deadline" }
+
+  /cases:
+    get:
+      operationId: listCases
+      tags: [cases]
+      parameters:
+        - { name: search, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { type: string } }
+        - { name: caseType, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Cases the user can access
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Case" }
+    post:
+      operationId: createCase
+      tags: [cases]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CaseInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Case" }
+  /cases/{caseId}:
+    parameters:
+      - { name: caseId, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: getCase
+      tags: [cases]
+      responses:
+        "200":
+          description: Case
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Case" }
+    patch:
+      operationId: updateCase
+      tags: [cases]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CaseUpdate" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Case" }
+    delete:
+      operationId: deleteCase
+      tags: [cases]
+      responses:
+        "204": { description: Deleted }
+  /cases/{caseId}/summary:
+    parameters:
+      - { name: caseId, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: getCaseSummary
+      tags: [cases]
+      responses:
+        "200":
+          description: Case summary metrics
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CaseSummary" }
+  /cases/{caseId}/periods:
+    parameters:
+      - { name: caseId, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: listPeriods
+      tags: [cases]
+      responses:
+        "200":
+          description: Financial periods
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/InvestigationPeriod" }
+    post:
+      operationId: createPeriod
+      tags: [cases]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InvestigationPeriodInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InvestigationPeriod" }
+  /periods/{periodId}:
+    parameters:
+      - { name: periodId, in: path, required: true, schema: { type: integer } }
+    delete:
+      operationId: deletePeriod
+      tags: [cases]
+      responses:
+        "204": { description: Deleted }
+  /cases/{caseId}/shares:
+    parameters:
+      - { name: caseId, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: listCaseShares
+      tags: [cases]
+      responses:
+        "200":
+          description: Sharing grants
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CaseShare" }
+    post:
+      operationId: createCaseShare
+      tags: [cases]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CaseShareInput" }
+      responses:
+        "201":
+          description: Shared
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CaseShare" }
+  /shares/{shareId}:
+    parameters:
+      - { name: shareId, in: path, required: true, schema: { type: integer } }
+    delete:
+      operationId: revokeCaseShare
+      tags: [cases]
+      responses:
+        "204": { description: Revoked }
+
+  /cases/{caseId}/bank-accounts:
+    parameters:
+      - { name: caseId, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: listBankAccounts
+      tags: [accounts]
+      responses:
+        "200":
+          description: Accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/BankAccount" }
+    post:
+      operationId: createBankAccount
+      tags: [accounts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BankAccountInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankAccount" }
+  /bank-accounts/{accountId}:
+    parameters:
+      - { name: accountId, in: path, required: true, schema: { type: integer } }
+    patch:
+      operationId: updateBankAccount
+      tags: [accounts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BankAccountInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankAccount" }
+    delete:
+      operationId: deleteBankAccount
+      tags: [accounts]
+      responses:
+        "204": { description: Deleted }
+  /bank-accounts/{accountId}/statements:
+    parameters:
+      - { name: accountId, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: importStatement
+      tags: [accounts]
+      summary: Import a CSV or Excel bank statement into the ledger
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StatementImportInput" }
+      responses:
+        "201":
+          description: Import result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StatementImportResult" }
+  /cases/{caseId}/statements:
+    parameters:
+      - { name: caseId, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: listStatements
+      tags: [accounts]
+      responses:
+        "200":
+          description: Imported statements
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/BankStatement" }
+
+  /cases/{caseId}/transactions:
+    parameters:
+      - { name: caseId, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: listTransactions
+      tags: [transactions]
+      parameters:
+      - { name: accountId, in: query, schema: { type: integer } }
+      - { name: category, in: query, schema: { type: string } }
+      - { name: reviewStatus, in: query, schema: { type: string } }
+      - { name: reconciliationStatus, in: query, schema: { type: string } }
+      - { name: financialYear, in: query, schema: { type: string } }
+      - { name: direction, in: query, schema: { type: string, enum: [credit, debit] } }
+      - { name: minAmount, in: query, schema: { type: number } }
+      - { name: search, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Transactions
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Transaction" }
+  /cases/{caseId}/transactions/suggest-classifications:
+    parameters:
+      - { name: caseId, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: suggestClassifications
+      tags: [transactions]
+      summary: Generate rule-based suggested categories for unclassified transactions (marked suggested until approved)
+      responses:
+        "200":
+          description: Count of suggestions created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CountResult" }
+  /transactions/{transactionId}:
+    parameters:
+      - { name: transactionId, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: getTransaction
+      tags: [transactions]
+      responses:
+        "200":
+          description: Transaction with edit history
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TransactionDetail" }
+    patch:
+      operationId: updateTransaction
+      tags: [transactions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TransactionUpdate" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Transaction" }
+  /transactions/{transactionId}/approve-suggestion:
+    parameters:
+      - { name: transactionId, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: approveSuggestion
+      tags: [transactions]
+      responses:
+        "200":
+          description: Suggestion approved and applied
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Transaction" }
+
+  /cases/{caseId}/reconciliation/run:
+    parameters:
+      - { name: caseId, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: runReconciliation
+      tags: [reconciliation]
+      summary: Find candidate matches (own-account transfers, family transfers, cash withdraw/redeposit, duplicates)
+      responses:
+        "200":
+          description: Number of new candidate matches
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CountResult" }
+  /cases/{caseId}/reconciliation/summary:
+    parameters:
+      - { name: caseId, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: getReconciliationSummary
+      tags: [reconciliation]
+      responses:
+        "200":
+          description: Status counts
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReconciliationSummary" }
+  /cases/{caseId}/matches:
+    parameters:
+      - { name: caseId, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: listMatches
+      tags: [reconciliation]
+      parameters:
+        - { name: status, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Matches
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TransactionMatch" }
+    post:
+      operationId: createManualMatch
+      tags: [reconciliation]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ManualMatchInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TransactionMatch" }
+  /matches/{matchId}:
+    parameters:
+      - { name: matchId, in: path, required: true, schema: { type: integer } }
+    patch:
+      operationId: reviewMatch
+      tags: [reconciliation]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MatchReview" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TransactionMatch" }
+
+  /cases/{caseId}/ledger-entries:
+    parameters:
+      - { name: caseId, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: listLedgerEntries
+      tags: [schedules]
+      responses:
+        "200":
+          description: Manually recorded income / receipt / expenditure entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/LedgerEntry" }
+    post:
+      operationId: createLedgerEntry
+      tags: [schedules]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LedgerEntryInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LedgerEntry" }
+  /ledger-entries/{entryId}:
+    parameters:
+      - { name: entryId, in: path, required: true, schema: { type: integer } }
+    patch:
+      operationId: updateLedgerEntry
+      tags: [schedules]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LedgerEntryInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LedgerEntry" }
+    delete:
+      operationId: deleteLedgerEntry
+      tags: [schedules]
+      responses:
+        "204": { description: Deleted }
+  /cases/{caseId}/schedules/income-expenditure:
+    parameters:
+      - { name: caseId, in: path, required: true, schema: { type: integer } }
+      - { name: granularity, in: query, schema: { type: string, enum: [annual, quarterly, monthly] } }
+    get:
+      operationId: getIncomeExpenditureSchedule
+      tags: [schedules]
+      responses:
+        "200":
+          description: Period-wise income, receipts and expenditure with source references
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IncomeExpenditureSchedule" }
+  /cases/{caseId}/schedules/da-calculation:
+    parameters:
+      - { name: caseId, in: path, required: true, schema: { type: integer } }
+      - { name: includeFamily, in: query, schema: { type: boolean } }
+    get:
+      operationId: getDaCalculation
+      tags: [schedules]
+      summary: Deterministic disproportionate-assets calculation (A/B/C/D) for the check period with full working
+      responses:
+        "200":
+          description: Calculation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DaCalculation" }
+  /cases/{caseId}/blind-spots:
+    parameters:
+      - { name: caseId, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: listBlindSpots
+      tags: [schedules]
+      responses:
+        "200":
+          description: Issues for human examination
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/BlindSpot" }
+  /cases/{caseId}/blind-spots/{code}:
+    parameters:
+      - { name: caseId, in: path, required: true, schema: { type: integer } }
+      - { name: code, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: reviewBlindSpot
+      tags: [schedules]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BlindSpotReview" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BlindSpot" }
+
+  /cases/{caseId}/assets:
+    parameters:
+      - { name: caseId, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: listAssets
+      tags: [assets]
+      responses:
+        "200":
+          description: Assets
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Asset" }
+    post:
+      operationId: createAsset
+      tags: [assets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssetInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Asset" }
+  /assets/{assetId}:
+    parameters:
+      - { name: assetId, in: path, required: true, schema: { type: integer } }
+    patch:
+      operationId: updateAsset
+      tags: [assets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssetInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Asset" }
+    delete:
+      operationId: deleteAsset
+      tags: [assets]
+      responses:
+        "204": { description: Deleted }
+  /cases/{caseId}/liabilities:
+    parameters:
+      - { name: caseId, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: listLiabilities
+      tags: [assets]
+      responses:
+        "200":
+          description: Liabilities
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Liability" }
+    post:
+      operationId: createLiability
+      tags: [assets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LiabilityInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Liability" }
+  /liabilities/{liabilityId}:
+    parameters:
+      - { name: liabilityId, in: path, required: true, schema: { type: integer } }
+    patch:
+      operationId: updateLiability
+      tags: [assets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LiabilityInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Liability" }
+    delete:
+      operationId: deleteLiability
+      tags: [assets]
+      responses:
+        "204": { description: Deleted }
+
+  /cases/{caseId}/family-members:
+    parameters:
+      - { name: caseId, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: listFamilyMembers
+      tags: [family]
+      responses:
+        "200":
+          description: Family members
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/FamilyMember" }
+    post:
+      operationId: createFamilyMember
+      tags: [family]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FamilyMemberInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FamilyMember" }
+  /family-members/{memberId}:
+    parameters:
+      - { name: memberId, in: path, required: true, schema: { type: integer } }
+    patch:
+      operationId: updateFamilyMember
+      tags: [family]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FamilyMemberInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FamilyMember" }
+    delete:
+      operationId: deleteFamilyMember
+      tags: [family]
+      responses:
+        "204": { description: Deleted }
+
+  /cases/{caseId}/queries:
+    parameters:
+      - { name: caseId, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: listQueries
+      tags: [queries]
+      responses:
+        "200":
+          description: Investigation queries
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/InvestigationQuery" }
+    post:
+      operationId: createQuery
+      tags: [queries]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InvestigationQueryInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InvestigationQuery" }
+  /queries/{queryId}:
+    parameters:
+      - { name: queryId, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: getQuery
+      tags: [queries]
+      responses:
+        "200":
+          description: Query with responses, assessments and history
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InvestigationQueryDetail" }
+    patch:
+      operationId: updateQuery
+      tags: [queries]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InvestigationQueryUpdate" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InvestigationQuery" }
+  /queries/{queryId}/responses:
+    parameters:
+      - { name: queryId, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: createQueryResponse
+      tags: [queries]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QueryResponseInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QueryResponse" }
+  /queries/{queryId}/draft-response:
+    parameters:
+      - { name: queryId, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: generateDraftResponse
+      tags: [queries]
+      summary: AI-generated draft explanation grounded in case records (must be reviewed before submission)
+      responses:
+        "200":
+          description: Draft
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DraftResponse" }
+  /responses/{responseId}:
+    parameters:
+      - { name: responseId, in: path, required: true, schema: { type: integer } }
+    patch:
+      operationId: updateQueryResponse
+      tags: [queries]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QueryResponseUpdate" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QueryResponse" }
+  /queries/{queryId}/assessments:
+    parameters:
+      - { name: queryId, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: createAssessment
+      tags: [queries]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssessmentInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Assessment" }
+
+  /cases/{caseId}/documents:
+    parameters:
+      - { name: caseId, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: listDocuments
+      tags: [documents]
+      parameters:
+        - { name: category, in: query, schema: { type: string } }
+        - { name: search, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Document" }
+    post:
+      operationId: createDocument
+      tags: [documents]
+      summary: Register an uploaded document (file already uploaded via presigned URL)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DocumentInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Document" }
+  /documents/{documentId}:
+    parameters:
+      - { name: documentId, in: path, required: true, schema: { type: integer } }
+    patch:
+      operationId: updateDocument
+      tags: [documents]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DocumentUpdate" }
+      responses:
+        "200":
+          description: Updated metadata (file itself is never altered)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Document" }
+    delete:
+      operationId: archiveDocument
+      tags: [documents]
+      summary: Archive a document (original file retained)
+      responses:
+        "204": { description: Archived }
+
+  /legal-references:
+    get:
+      operationId: listLegalReferences
+      tags: [legal]
+      parameters:
+        - { name: search, in: query, schema: { type: string } }
+        - { name: category, in: query, schema: { type: string } }
+        - { name: sourceType, in: query, schema: { type: string } }
+        - { name: court, in: query, schema: { type: string } }
+        - { name: verificationStatus, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Legal references
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/LegalReference" }
+    post:
+      operationId: createLegalReference
+      tags: [legal]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LegalReferenceInput" }
+      responses:
+        "201":
+          description: Created (always starts as unverified)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LegalReference" }
+  /legal-references/{referenceId}:
+    parameters:
+      - { name: referenceId, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: getLegalReference
+      tags: [legal]
+      responses:
+        "200":
+          description: Reference
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LegalReference" }
+    patch:
+      operationId: updateLegalReference
+      tags: [legal]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LegalReferenceInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LegalReference" }
+  /legal-references/{referenceId}/verify:
+    parameters:
+      - { name: referenceId, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: verifyLegalReference
+      tags: [legal]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LegalVerificationInput" }
+      responses:
+        "200":
+          description: Verification recorded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LegalReference" }
+  /cases/{caseId}/legal-links:
+    parameters:
+      - { name: caseId, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: listCaseLegalLinks
+      tags: [legal]
+      responses:
+        "200":
+          description: Legal references attached to this case
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CaseLegalLink" }
+    post:
+      operationId: createCaseLegalLink
+      tags: [legal]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CaseLegalLinkInput" }
+      responses:
+        "201":
+          description: Linked
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CaseLegalLink" }
+  /legal-links/{linkId}:
+    parameters:
+      - { name: linkId, in: path, required: true, schema: { type: integer } }
+    delete:
+      operationId: deleteCaseLegalLink
+      tags: [legal]
+      responses:
+        "204": { description: Removed }
+
+  /cases/{caseId}/assistant/messages:
+    parameters:
+      - { name: caseId, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: listAssistantMessages
+      tags: [assistant]
+      responses:
+        "200":
+          description: Conversation
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AssistantMessage" }
+    post:
+      operationId: askAssistant
+      tags: [assistant]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssistantQuestion" }
+      responses:
+        "200":
+          description: Assistant answer
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssistantMessage" }
+
+  /report-types:
+    get:
+      operationId: listReportTypes
+      tags: [reports]
+      responses:
+        "200":
+          description: Available report types
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ReportType" }
+  /cases/{caseId}/reports:
+    parameters:
+      - { name: caseId, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: listGeneratedReports
+      tags: [reports]
+      responses:
+        "200":
+          description: Export history
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/GeneratedReport" }
+  /cases/{caseId}/reports/export:
+    parameters:
+      - { name: caseId, in: path, required: true, schema: { type: integer } }
+      - { name: type, in: query, required: true, schema: { type: string } }
+      - { name: format, in: query, required: true, schema: { type: string, enum: [xlsx, pdf, docx] } }
+    get:
+      operationId: exportReport
+      tags: [reports]
+      summary: Download a generated report file (use a plain link, not the hook)
+      responses:
+        "200":
+          description: File
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+
+  /audit-logs:
+    get:
+      operationId: listAuditLogs
+      tags: [audit]
+      parameters:
+        - { name: caseId, in: query, schema: { type: integer } }
+        - { name: action, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer } }
+      responses:
+        "200":
+          description: Audit trail (append-only)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AuditLog" }
+
+  /storage/uploads/request-url:
+    post:
+      tags: [Storage]
+      operationId: requestUploadUrl
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UploadUrlRequest" }
+      responses:
+        "200":
+          description: Presigned upload URL generated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UploadUrlResponse" }
+        "400":
+          description: Invalid
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+  /storage/objects/{objectPath}:
+    get:
+      tags: [Storage]
+      operationId: getStorageObject
+      parameters:
+        - { name: objectPath, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Object content
+          content:
+            "*/*":
+              schema: { type: string, format: binary }
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status: { type: string }
+      required: [status]
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+    CountResult:
+      type: object
+      required: [count]
+      properties:
+        count: { type: integer }
+        message: { type: string }
+    UploadUrlRequest:
+      type: object
+      required: [name, size, contentType]
+      properties:
+        name: { type: string, minLength: 1 }
+        size: { type: integer, minimum: 1 }
+        contentType: { type: string, minLength: 1 }
+    UploadUrlResponse:
+      type: object
+      required: [uploadURL, objectPath]
+      properties:
+        uploadURL: { type: string, format: uri }
+        objectPath: { type: string }
+        metadata: { $ref: "#/components/schemas/UploadUrlRequest" }
+
+    UserProfile:
+      type: object
+      required: [id, email, displayName, workspace, role, onboarded]
+      properties:
+        id: { type: integer }
+        email: { type: string }
+        displayName: { type: string }
+        workspace:
+          type: string
+          enum: [client, investigation]
+          description: client = accused/advocate/CA workspace; investigation = authorised officer workspace
+        role:
+          type: string
+          enum: [individual, advocate, chartered_accountant, investigation_officer, admin]
+        organisation: { type: ["string", "null"] }
+        onboarded: { type: boolean }
+    UserProfileUpdate:
+      type: object
+      properties:
+        displayName: { type: string }
+        workspace: { type: string, enum: [client, investigation] }
+        role: { type: string, enum: [individual, advocate, chartered_accountant, investigation_officer] }
+        organisation: { type: ["string", "null"] }
+    ServiceStatus:
+      type: object
+      required: [key, name, available, detail]
+      properties:
+        key: { type: string }
+        name: { type: string }
+        available: { type: boolean }
+        detail: { type: string }
+
+    DashboardSummary:
+      type: object
+      required: [activeCases, casesByType, bankAccounts, transactions, awaitingClassification, awaitingReconciliation, missingDocuments, pendingQueries, responsesAwaitingReview, financialYears, documents]
+      properties:
+        activeCases: { type: integer }
+        casesByType:
+          type: array
+          items:
+            type: object
+            required: [caseType, count]
+            properties:
+              caseType: { type: string }
+              count: { type: integer }
+        bankAccounts: { type: integer }
+        transactions: { type: integer }
+        awaitingClassification: { type: integer }
+        awaitingReconciliation: { type: integer }
+        missingDocuments: { type: integer, description: High-value transactions without a linked supporting document }
+        pendingQueries: { type: integer }
+        responsesAwaitingReview: { type: integer }
+        financialYears: { type: array, items: { type: string } }
+        documents: { type: integer }
+        recentDocuments:
+          type: array
+          items: { $ref: "#/components/schemas/Document" }
+    FinancialYearTotal:
+      type: object
+      required: [financialYear, credits, debits, count]
+      properties:
+        financialYear: { type: string }
+        credits: { type: number }
+        debits: { type: number }
+        count: { type: integer }
+    Deadline:
+      type: object
+      required: [kind, title, dueDate, caseId, caseTitle]
+      properties:
+        kind: { type: string, enum: [query_response, case_submission] }
+        title: { type: string }
+        dueDate: { type: string, format: date }
+        caseId: { type: integer }
+        caseTitle: { type: string }
+        queryId: { type: ["integer", "null"] }
+
+    Case:
+      type: object
+      required: [id, title, caseType, status, isDemo, accessRole, createdAt]
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        referenceNumber: { type: ["string", "null"] }
+        caseType:
+          type: string
+          enum: [lokayukta_da, income_tax_scrutiny, income_tax_assessment, other_financial, custom]
+        investigatingAuthority: { type: ["string", "null"] }
+        jurisdiction: { type: ["string", "null"] }
+        subjectName: { type: ["string", "null"], description: Person whose finances are under investigation }
+        periodStart: { type: ["string", "null"], format: date }
+        periodEnd: { type: ["string", "null"], format: date }
+        noticeDate: { type: ["string", "null"], format: date }
+        noticeDetails: { type: ["string", "null"] }
+        officerDetails: { type: ["string", "null"] }
+        assignedAdvocate: { type: ["string", "null"] }
+        assignedCa: { type: ["string", "null"] }
+        status: { type: string, enum: [open, under_preparation, submitted, under_review, closed] }
+        legislation: { type: ["string", "null"] }
+        submissionDeadline: { type: ["string", "null"], format: date }
+        isDemo: { type: boolean }
+        accessRole: { type: string, enum: [owner, editor, reviewer, investigator], description: Current user's access to this case }
+        createdAt: { type: string, format: date-time }
+    CaseInput:
+      type: object
+      required: [title, caseType]
+      properties:
+        title: { type: string, minLength: 1 }
+        referenceNumber: { type: ["string", "null"] }
+        caseType: { type: string, enum: [lokayukta_da, income_tax_scrutiny, income_tax_assessment, other_financial, custom] }
+        investigatingAuthority: { type: ["string", "null"] }
+        jurisdiction: { type: ["string", "null"] }
+        subjectName: { type: ["string", "null"] }
+        periodStart: { type: ["string", "null"], format: date }
+        periodEnd: { type: ["string", "null"], format: date }
+        noticeDate: { type: ["string", "null"], format: date }
+        noticeDetails: { type: ["string", "null"] }
+        officerDetails: { type: ["string", "null"] }
+        assignedAdvocate: { type: ["string", "null"] }
+        assignedCa: { type: ["string", "null"] }
+        status: { type: string, enum: [open, under_preparation, submitted, under_review, closed] }
+        legislation: { type: ["string", "null"] }
+        submissionDeadline: { type: ["string", "null"], format: date }
+    CaseUpdate:
+      type: object
+      properties:
+        title: { type: string, minLength: 1 }
+        referenceNumber: { type: ["string", "null"] }
+        caseType: { type: string, enum: [lokayukta_da, income_tax_scrutiny, income_tax_assessment, other_financial, custom] }
+        investigatingAuthority: { type: ["string", "null"] }
+        jurisdiction: { type: ["string", "null"] }
+        subjectName: { type: ["string", "null"] }
+        periodStart: { type: ["string", "null"], format: date }
+        periodEnd: { type: ["string", "null"], format: date }
+        noticeDate: { type: ["string", "null"], format: date }
+        noticeDetails: { type: ["string", "null"] }
+        officerDetails: { type: ["string", "null"] }
+        assignedAdvocate: { type: ["string", "null"] }
+        assignedCa: { type: ["string", "null"] }
+        status: { type: string, enum: [open, under_preparation, submitted, under_review, closed] }
+        legislation: { type: ["string", "null"] }
+        submissionDeadline: { type: ["string", "null"], format: date }
+    CaseSummary:
+      type: object
+      required: [caseId, bankAccounts, statements, transactions, totalCredits, totalDebits, unclassified, suggested, unreconciled, assetsValue, liabilitiesValue, familyMembers, documents, openQueries, financialYears]
+      properties:
+        caseId: { type: integer }
+        bankAccounts: { type: integer }
+        statements: { type: integer }
+        transactions: { type: integer }
+        totalCredits: { type: number }
+        totalDebits: { type: number }
+        unclassified: { type: integer }
+        suggested: { type: integer }
+        unreconciled: { type: integer }
+        assetsValue: { type: number }
+        liabilitiesValue: { type: number }
+        familyMembers: { type: integer }
+        documents: { type: integer }
+        openQueries: { type: integer }
+        financialYears: { type: array, items: { type: string } }
+        categoryBreakdown:
+          type: array
+          items:
+            type: object
+            required: [category, credits, debits, count]
+            properties:
+              category: { type: string }
+              credits: { type: number }
+              debits: { type: number }
+              count: { type: integer }
+    InvestigationPeriod:
+      type: object
+      required: [id, caseId, label, startDate, endDate, periodType]
+      properties:
+        id: { type: integer }
+        caseId: { type: integer }
+        label: { type: string }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        periodType: { type: string, enum: [check_period, assessment_year, financial_year, custom] }
+    InvestigationPeriodInput:
+      type: object
+      required: [label, startDate, endDate, periodType]
+      properties:
+        label: { type: string, minLength: 1 }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        periodType: { type: string, enum: [check_period, assessment_year, financial_year, custom] }
+    CaseShare:
+      type: object
+      required: [id, caseId, email, accessRole, createdAt]
+      properties:
+        id: { type: integer }
+        caseId: { type: integer }
+        email: { type: string }
+        accessRole: { type: string, enum: [editor, reviewer, investigator] }
+        note: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        createdBy: { type: ["string", "null"] }
+    CaseShareInput:
+      type: object
+      required: [email, accessRole]
+      properties:
+        email: { type: string, format: email }
+        accessRole: { type: string, enum: [editor, reviewer, investigator] }
+        note: { type: ["string", "null"] }
+
+    BankAccount:
+      type: object
+      required: [id, caseId, bankName, accountHolder, accountType, maskedAccountNumber, ownership, currency, transactionCount]
+      properties:
+        id: { type: integer }
+        caseId: { type: integer }
+        bankName: { type: string }
+        accountHolder: { type: string }
+        accountType: { type: string, enum: [savings, current, fixed_deposit, loan, credit_card, other] }
+        maskedAccountNumber: { type: string }
+        ifsc: { type: ["string", "null"] }
+        branch: { type: ["string", "null"] }
+        ownership: { type: string, enum: [self, spouse, joint, family_member, other] }
+        familyMemberId: { type: ["integer", "null"] }
+        jointHolders: { type: ["string", "null"] }
+        openingDate: { type: ["string", "null"], format: date }
+        closingDate: { type: ["string", "null"], format: date }
+        currency: { type: string }
+        transactionCount: { type: integer }
+        firstTransactionDate: { type: ["string", "null"], format: date }
+        lastTransactionDate: { type: ["string", "null"], format: date }
+        totalCredits: { type: number }
+        totalDebits: { type: number }
+    BankAccountInput:
+      type: object
+      required: [bankName, accountHolder, accountType, maskedAccountNumber, ownership]
+      properties:
+        bankName: { type: string, minLength: 1 }
+        accountHolder: { type: string, minLength: 1 }
+        accountType: { type: string, enum: [savings, current, fixed_deposit, loan, credit_card, other] }
+        maskedAccountNumber: { type: string, minLength: 1 }
+        ifsc: { type: ["string", "null"] }
+        branch: { type: ["string", "null"] }
+        ownership: { type: string, enum: [self, spouse, joint, family_member, other] }
+        familyMemberId: { type: ["integer", "null"] }
+        jointHolders: { type: ["string", "null"] }
+        openingDate: { type: ["string", "null"], format: date }
+        closingDate: { type: ["string", "null"], format: date }
+        currency: { type: string }
+    StatementImportInput:
+      type: object
+      required: [fileName, fileType, content]
+      properties:
+        fileName: { type: string, minLength: 1 }
+        fileType: { type: string, enum: [csv, xlsx, pdf] }
+        content: { type: string, description: Raw CSV text for csv, base64 for xlsx/pdf }
+        declaredOpeningBalance: { type: ["number", "null"] }
+        declaredClosingBalance: { type: ["number", "null"] }
+        documentId: { type: ["integer", "null"], description: Optional link to the stored original file in the document repository }
+    StatementImportResult:
+      type: object
+      required: [statementId, status, rowsRead, imported, duplicatesSkipped, errors, warnings, balanceCheck]
+      properties:
+        statementId: { type: integer }
+        status: { type: string, enum: [imported, imported_with_warnings, failed, unsupported] }
+        rowsRead: { type: integer }
+        imported: { type: integer }
+        duplicatesSkipped: { type: integer }
+        detectedColumns: { type: array, items: { type: string } }
+        errors: { type: array, items: { type: string } }
+        warnings: { type: array, items: { type: string } }
+        balanceCheck:
+          type: object
+          required: [status]
+          properties:
+            status: { type: string, enum: [passed, failed, not_available] }
+            computedClosing: { type: ["number", "null"] }
+            declaredClosing: { type: ["number", "null"] }
+            breaks: { type: integer, description: Rows where running balance did not equal previous balance + credit - debit }
+    BankStatement:
+      type: object
+      required: [id, bankAccountId, fileName, fileType, status, rowsImported, duplicatesSkipped, fileHash, createdAt]
+      properties:
+        id: { type: integer }
+        bankAccountId: { type: integer }
+        bankName: { type: string }
+        maskedAccountNumber: { type: string }
+        fileName: { type: string }
+        fileType: { type: string }
+        fileHash: { type: string }
+        status: { type: string }
+        periodStart: { type: ["string", "null"], format: date }
+        periodEnd: { type: ["string", "null"], format: date }
+        rowsImported: { type: integer }
+        duplicatesSkipped: { type: integer }
+        balanceCheckStatus: { type: ["string", "null"] }
+        warnings: { type: array, items: { type: string } }
+        documentId: { type: ["integer", "null"] }
+        createdAt: { type: string, format: date-time }
+
+    Transaction:
+      type: object
+      required: [id, caseId, bankAccountId, txnDate, description, debit, credit, financialYear, category, classificationStatus, reviewStatus, reconciliationStatus, tags, documentIds, isEdited]
+      properties:
+        id: { type: integer }
+        caseId: { type: integer }
+        bankAccountId: { type: integer }
+        bankName: { type: string }
+        maskedAccountNumber: { type: string }
+        statementId: { type: ["integer", "null"] }
+        sourceRow: { type: ["integer", "null"], description: Row number in the original statement }
+        txnDate: { type: string, format: date }
+        valueDate: { type: ["string", "null"], format: date }
+        description: { type: string }
+        referenceNumber: { type: ["string", "null"] }
+        debit: { type: number }
+        credit: { type: number }
+        balance: { type: ["number", "null"] }
+        financialYear: { type: string, description: e.g. 2019-20 }
+        category: { type: ["string", "null"] }
+        suggestedCategory: { type: ["string", "null"] }
+        suggestionReason: { type: ["string", "null"] }
+        classificationStatus: { type: string, enum: [unclassified, suggested, approved] }
+        reviewStatus: { type: string, enum: [pending, reviewed, flagged] }
+        reconciliationStatus: { type: string, enum: [unreconciled, partially_reconciled, reconciled, manual_review] }
+        tags: { type: array, items: { type: string } }
+        explanation: { type: ["string", "null"] }
+        familyMemberId: { type: ["integer", "null"] }
+        documentIds: { type: array, items: { type: integer } }
+        isEdited: { type: boolean, description: True when a user corrected imported values; originals preserved in history }
+    TransactionDetail:
+      allOf:
+        - $ref: "#/components/schemas/Transaction"
+        - type: object
+          required: [original, history]
+          properties:
+            original:
+              type: object
+              required: [description, debit, credit, txnDate]
+              properties:
+                description: { type: string }
+                debit: { type: number }
+                credit: { type: number }
+                txnDate: { type: string, format: date }
+                balance: { type: ["number", "null"] }
+            history:
+              type: array
+              items: { $ref: "#/components/schemas/AuditLog" }
+    TransactionUpdate:
+      type: object
+      properties:
+        category: { type: ["string", "null"] }
+        tags: { type: array, items: { type: string } }
+        explanation: { type: ["string", "null"] }
+        familyMemberId: { type: ["integer", "null"] }
+        reviewStatus: { type: string, enum: [pending, reviewed, flagged] }
+        documentIds: { type: array, items: { type: integer } }
+        correctedDescription: { type: string }
+        correctedDebit: { type: number }
+        correctedCredit: { type: number }
+        correctedTxnDate: { type: string, format: date }
+        correctionReason: { type: string, description: Required when correcting imported values }
+
+    TransactionMatch:
+      type: object
+      required: [id, caseId, matchType, confidence, status, sourceTransactions, targetTransactions, amount, evidence, createdBy]
+      properties:
+        id: { type: integer }
+        caseId: { type: integer }
+        matchType:
+          type: string
+          enum: [own_account_transfer, family_transfer, cash_withdrawal_redeposit, duplicate_credit, loan_receipt_repayment, investment_purchase_redemption, other]
+        confidence: { type: number, description: 0-100 }
+        status: { type: string, enum: [suggested, approved, rejected, partial] }
+        amount: { type: number }
+        dateGapDays: { type: integer }
+        evidence: { type: array, items: { type: string }, description: Matching signals (amount, date proximity, reference, description) }
+        sourceTransactions: { type: array, items: { $ref: "#/components/schemas/Transaction" } }
+        targetTransactions: { type: array, items: { $ref: "#/components/schemas/Transaction" } }
+        reviewNote: { type: ["string", "null"] }
+        createdBy: { type: string, enum: [engine, user] }
+        reviewedAt: { type: ["string", "null"], format: date-time }
+    ManualMatchInput:
+      type: object
+      required: [matchType, sourceTransactionIds, targetTransactionIds]
+      properties:
+        matchType:
+          type: string
+          enum: [own_account_transfer, family_transfer, cash_withdrawal_redeposit, duplicate_credit, loan_receipt_repayment, investment_purchase_redemption, other]
+        sourceTransactionIds: { type: array, items: { type: integer }, minItems: 1 }
+        targetTransactionIds: { type: array, items: { type: integer }, minItems: 1 }
+        reviewNote: { type: ["string", "null"] }
+    MatchReview:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [approved, rejected, partial] }
+        reviewNote: { type: ["string", "null"] }
+    ReconciliationSummary:
+      type: object
+      required: [reconciled, partiallyReconciled, unreconciled, manualReview, suggestedMatches, approvedMatches, rejectedMatches, excludedTransferAmount]
+      properties:
+        reconciled: { type: integer }
+        partiallyReconciled: { type: integer }
+        unreconciled: { type: integer }
+        manualReview: { type: integer }
+        suggestedMatches: { type: integer }
+        approvedMatches: { type: integer }
+        rejectedMatches: { type: integer }
+        excludedTransferAmount: { type: number, description: Amount excluded from income/expenditure as approved own-account transfers to prevent double counting }
+
+    LedgerEntry:
+      type: object
+      required: [id, caseId, entryType, category, amount, entryDate, financialYear, verificationStatus]
+      properties:
+        id: { type: integer }
+        caseId: { type: integer }
+        entryType: { type: string, enum: [income, receipt, expenditure] }
+        category: { type: string }
+        description: { type: ["string", "null"] }
+        amount: { type: number }
+        entryDate: { type: string, format: date }
+        financialYear: { type: string }
+        familyMemberId: { type: ["integer", "null"] }
+        sourceReference: { type: ["string", "null"] }
+        documentIds: { type: array, items: { type: integer } }
+        verificationStatus: { type: string, enum: [user_provided, documented, verified] }
+    LedgerEntryInput:
+      type: object
+      required: [entryType, category, amount, entryDate]
+      properties:
+        entryType: { type: string, enum: [income, receipt, expenditure] }
+        category: { type: string, minLength: 1 }
+        description: { type: ["string", "null"] }
+        amount: { type: number, minimum: 0 }
+        entryDate: { type: string, format: date }
+        familyMemberId: { type: ["integer", "null"] }
+        sourceReference: { type: ["string", "null"] }
+        documentIds: { type: array, items: { type: integer } }
+        verificationStatus: { type: string, enum: [user_provided, documented, verified] }
+    ScheduleLine:
+      type: object
+      required: [section, category, amount, sources]
+      properties:
+        section: { type: string, enum: [income, receipt, expenditure] }
+        category: { type: string }
+        amount: { type: number }
+        sources:
+          type: array
+          items:
+            type: object
+            required: [kind, id, label, amount]
+            properties:
+              kind: { type: string, enum: [transaction, ledger_entry, asset, liability] }
+              id: { type: integer }
+              label: { type: string }
+              amount: { type: number }
+              date: { type: ["string", "null"], format: date }
+    SchedulePeriod:
+      type: object
+      required: [period, totalIncome, totalReceipts, totalExpenditure, lines]
+      properties:
+        period: { type: string }
+        totalIncome: { type: number }
+        totalReceipts: { type: number }
+        totalExpenditure: { type: number }
+        lines: { type: array, items: { $ref: "#/components/schemas/ScheduleLine" } }
+    IncomeExpenditureSchedule:
+      type: object
+      required: [granularity, periods, totals, notes]
+      properties:
+        granularity: { type: string }
+        periods: { type: array, items: { $ref: "#/components/schemas/SchedulePeriod" } }
+        totals:
+          type: object
+          required: [income, receipts, expenditure, excludedTransfers]
+          properties:
+            income: { type: number }
+            receipts: { type: number }
+            expenditure: { type: number }
+            excludedTransfers: { type: number }
+        notes: { type: array, items: { type: string } }
+
+    DaComponent:
+      type: object
+      required: [code, label, amount, lines]
+      properties:
+        code: { type: string, enum: [A, B, C, D] }
+        label: { type: string }
+        amount: { type: number }
+        lines:
+          type: array
+          items:
+            type: object
+            required: [label, amount, basis]
+            properties:
+              label: { type: string }
+              amount: { type: number }
+              basis: { type: string, description: How this figure was derived and from which records }
+              sourceKind: { type: ["string", "null"] }
+              sourceId: { type: ["integer", "null"] }
+    DaCalculation:
+      type: object
+      required: [caseId, checkPeriodConfigured, components, assetsAcquired, likelySavings, disproportion, disproportionPercent, formula, assumptions, missingInformation, templateVersion]
+      properties:
+        caseId: { type: integer }
+        checkPeriodConfigured: { type: boolean }
+        checkPeriodStart: { type: ["string", "null"], format: date }
+        checkPeriodEnd: { type: ["string", "null"], format: date }
+        includeFamily: { type: boolean }
+        components: { type: array, items: { $ref: "#/components/schemas/DaComponent" } }
+        assetsAcquired: { type: number, description: B - A }
+        likelySavings: { type: number, description: C - D }
+        disproportion: { type: number, description: (B - A) - (C - D) }
+        disproportionPercent: { type: ["number", "null"], description: disproportion / C x 100 }
+        formula: { type: string }
+        assumptions: { type: array, items: { type: string } }
+        missingInformation: { type: array, items: { type: string } }
+        templateVersion: { type: string }
+        disclaimer: { type: string }
+    BlindSpot:
+      type: object
+      required: [code, title, whyItMatters, severity, reviewStatus, relatedTransactionIds, suggestedClarification]
+      properties:
+        code: { type: string }
+        title: { type: string }
+        whyItMatters: { type: string }
+        severity: { type: string, enum: [high, medium, low] }
+        relatedTransactionIds: { type: array, items: { type: integer } }
+        relatedDocumentIds: { type: array, items: { type: integer } }
+        suggestedClarification: { type: string }
+        reviewStatus: { type: string, enum: [open, reviewing, resolved, not_applicable] }
+        reviewNote: { type: ["string", "null"] }
+    BlindSpotReview:
+      type: object
+      required: [reviewStatus]
+      properties:
+        reviewStatus: { type: string, enum: [open, reviewing, resolved, not_applicable] }
+        reviewNote: { type: ["string", "null"] }
+
+    Asset:
+      type: object
+      required: [id, caseId, assetType, description, ownership, documentIds]
+      properties:
+        id: { type: integer }
+        caseId: { type: integer }
+        assetType:
+          type: string
+          enum: [land, building, residential_property, commercial_property, vehicle, gold_jewellery, bank_deposit, fixed_deposit, mutual_fund, shares, insurance, cash, other_investment]
+        description: { type: string }
+        acquisitionDate: { type: ["string", "null"], format: date }
+        disposalDate: { type: ["string", "null"], format: date }
+        purchasePrice: { type: ["number", "null"] }
+        registrationCost: { type: ["number", "null"] }
+        currentValuation: { type: ["number", "null"] }
+        valuationBasis: { type: ["string", "null"] }
+        legalOwner: { type: ["string", "null"], description: Name of registered/legal owner }
+        ownership: { type: string, enum: [self, spouse, joint, family_member, other] }
+        familyMemberId: { type: ["integer", "null"] }
+        ownershipSharePercent: { type: ["number", "null"] }
+        sourceOfFunds: { type: ["string", "null"] }
+        fundingContributionBySubject: { type: ["number", "null"], description: Amount funded by the investigated person, recorded separately from legal ownership }
+        linkedLiabilityId: { type: ["integer", "null"] }
+        documentIds: { type: array, items: { type: integer } }
+        notes: { type: ["string", "null"] }
+    AssetInput:
+      type: object
+      required: [assetType, description, ownership]
+      properties:
+        assetType:
+          type: string
+          enum: [land, building, residential_property, commercial_property, vehicle, gold_jewellery, bank_deposit, fixed_deposit, mutual_fund, shares, insurance, cash, other_investment]
+        description: { type: string, minLength: 1 }
+        acquisitionDate: { type: ["string", "null"], format: date }
+        disposalDate: { type: ["string", "null"], format: date }
+        purchasePrice: { type: ["number", "null"] }
+        registrationCost: { type: ["number", "null"] }
+        currentValuation: { type: ["number", "null"] }
+        valuationBasis: { type: ["string", "null"] }
+        legalOwner: { type: ["string", "null"] }
+        ownership: { type: string, enum: [self, spouse, joint, family_member, other] }
+        familyMemberId: { type: ["integer", "null"] }
+        ownershipSharePercent: { type: ["number", "null"] }
+        sourceOfFunds: { type: ["string", "null"] }
+        fundingContributionBySubject: { type: ["number", "null"] }
+        linkedLiabilityId: { type: ["integer", "null"] }
+        documentIds: { type: array, items: { type: integer } }
+        notes: { type: ["string", "null"] }
+    Liability:
+      type: object
+      required: [id, caseId, liabilityType, lender, ownership, documentIds]
+      properties:
+        id: { type: integer }
+        caseId: { type: integer }
+        liabilityType: { type: string, enum: [bank_loan, personal_loan, housing_loan, vehicle_loan, other_borrowing] }
+        lender: { type: string }
+        borrower: { type: ["string", "null"] }
+        ownership: { type: string, enum: [self, spouse, joint, family_member, other] }
+        familyMemberId: { type: ["integer", "null"] }
+        sanctionDate: { type: ["string", "null"], format: date }
+        principalAmount: { type: ["number", "null"] }
+        outstandingAtStart: { type: ["number", "null"], description: Outstanding at start of check period }
+        outstandingAtEnd: { type: ["number", "null"], description: Outstanding at end of check period }
+        interestRate: { type: ["number", "null"] }
+        purpose: { type: ["string", "null"] }
+        documentIds: { type: array, items: { type: integer } }
+        notes: { type: ["string", "null"] }
+    LiabilityInput:
+      type: object
+      required: [liabilityType, lender, ownership]
+      properties:
+        liabilityType: { type: string, enum: [bank_loan, personal_loan, housing_loan, vehicle_loan, other_borrowing] }
+        lender: { type: string, minLength: 1 }
+        borrower: { type: ["string", "null"] }
+        ownership: { type: string, enum: [self, spouse, joint, family_member, other] }
+        familyMemberId: { type: ["integer", "null"] }
+        sanctionDate: { type: ["string", "null"], format: date }
+        principalAmount: { type: ["number", "null"] }
+        outstandingAtStart: { type: ["number", "null"] }
+        outstandingAtEnd: { type: ["number", "null"] }
+        interestRate: { type: ["number", "null"] }
+        purpose: { type: ["string", "null"] }
+        documentIds: { type: array, items: { type: integer } }
+        notes: { type: ["string", "null"] }
+
+    FamilyMember:
+      type: object
+      required: [id, caseId, name, relationship]
+      properties:
+        id: { type: integer }
+        caseId: { type: integer }
+        name: { type: string }
+        relationship: { type: string, enum: [spouse, son, daughter, father, mother, other] }
+        dateOfBirth: { type: ["string", "null"], format: date }
+        occupation: { type: ["string", "null"] }
+        employer: { type: ["string", "null"] }
+        pan: { type: ["string", "null"], description: Masked PAN }
+        hasIndependentIncome: { type: boolean }
+        annualIncomeDeclared: { type: ["number", "null"] }
+        businessInterests: { type: ["string", "null"] }
+        notes: { type: ["string", "null"] }
+        bankAccountCount: { type: integer }
+        assetCount: { type: integer }
+        assetsValue: { type: number }
+        incomeRecorded: { type: number }
+    FamilyMemberInput:
+      type: object
+      required: [name, relationship]
+      properties:
+        name: { type: string, minLength: 1 }
+        relationship: { type: string, enum: [spouse, son, daughter, father, mother, other] }
+        dateOfBirth: { type: ["string", "null"], format: date }
+        occupation: { type: ["string", "null"] }
+        employer: { type: ["string", "null"] }
+        pan: { type: ["string", "null"] }
+        hasIndependentIncome: { type: boolean }
+        annualIncomeDeclared: { type: ["number", "null"] }
+        businessInterests: { type: ["string", "null"] }
+        notes: { type: ["string", "null"] }
+
+    InvestigationQuery:
+      type: object
+      required: [id, caseId, questionNumber, subject, description, topic, status, relatedTransactionIds, relatedAssetIds, relatedDocumentIds, responseCount, createdAt]
+      properties:
+        id: { type: integer }
+        caseId: { type: integer }
+        questionNumber: { type: string }
+        subject: { type: string }
+        description: { type: string }
+        topic:
+          type: string
+          enum: [bank_credits, cash_deposits, assets, property_acquisition, income_sources, expenditure, loans, family_transactions, investments, gifts, liabilities, tax_returns, other]
+        financialYear: { type: ["string", "null"] }
+        applicableSchedule: { type: ["string", "null"] }
+        responseDeadline: { type: ["string", "null"], format: date }
+        status: { type: string, enum: [open, draft, submitted, under_review, clarification_required, partially_addressed, reviewed, closed] }
+        parentQueryId: { type: ["integer", "null"], description: Set for follow-up questions }
+        relatedTransactionIds: { type: array, items: { type: integer } }
+        relatedAssetIds: { type: array, items: { type: integer } }
+        relatedDocumentIds: { type: array, items: { type: integer } }
+        raisedBy: { type: ["string", "null"] }
+        responseCount: { type: integer }
+        createdAt: { type: string, format: date-time }
+    InvestigationQueryInput:
+      type: object
+      required: [subject, description, topic]
+      properties:
+        questionNumber: { type: string, description: Auto-assigned when omitted }
+        subject: { type: string, minLength: 1 }
+        description: { type: string, minLength: 1 }
+        topic:
+          type: string
+          enum: [bank_credits, cash_deposits, assets, property_acquisition, income_sources, expenditure, loans, family_transactions, investments, gifts, liabilities, tax_returns, other]
+        financialYear: { type: ["string", "null"] }
+        applicableSchedule: { type: ["string", "null"] }
+        responseDeadline: { type: ["string", "null"], format: date }
+        parentQueryId: { type: ["integer", "null"] }
+        relatedTransactionIds: { type: array, items: { type: integer } }
+        relatedAssetIds: { type: array, items: { type: integer } }
+        relatedDocumentIds: { type: array, items: { type: integer } }
+    InvestigationQueryUpdate:
+      type: object
+      properties:
+        subject: { type: string }
+        description: { type: string }
+        financialYear: { type: ["string", "null"] }
+        applicableSchedule: { type: ["string", "null"] }
+        responseDeadline: { type: ["string", "null"], format: date }
+        status: { type: string, enum: [open, draft, submitted, under_review, clarification_required, partially_addressed, reviewed, closed] }
+        relatedTransactionIds: { type: array, items: { type: integer } }
+        relatedAssetIds: { type: array, items: { type: integer } }
+        relatedDocumentIds: { type: array, items: { type: integer } }
+    QueryResponse:
+      type: object
+      required: [id, queryId, version, body, status, isAiDraft, documentIds, createdAt]
+      properties:
+        id: { type: integer }
+        queryId: { type: integer }
+        version: { type: integer }
+        body: { type: string }
+        status: { type: string, enum: [draft, submitted, under_review, clarification_required, partially_addressed, reviewed, closed] }
+        isAiDraft: { type: boolean, description: True if content originated from an AI draft; must be approved by a user before submission }
+        approvedBy: { type: ["string", "null"] }
+        approvedAt: { type: ["string", "null"], format: date-time }
+        submittedAt: { type: ["string", "null"], format: date-time }
+        documentIds: { type: array, items: { type: integer } }
+        authorName: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    QueryResponseInput:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string, minLength: 1 }
+        isAiDraft: { type: boolean }
+        documentIds: { type: array, items: { type: integer } }
+    QueryResponseUpdate:
+      type: object
+      properties:
+        body: { type: string }
+        documentIds: { type: array, items: { type: integer } }
+        action:
+          type: string
+          enum: [approve, submit, mark_under_review]
+          description: approve = user/advocate approval of content; submit requires approval first
+    Assessment:
+      type: object
+      required: [id, queryId, outcome, reasons, createdAt]
+      properties:
+        id: { type: integer }
+        queryId: { type: integer }
+        responseId: { type: ["integer", "null"] }
+        outcome: { type: string, enum: [accepted, disputed, unresolved, clarification_required] }
+        reasons: { type: string }
+        assessorName: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    AssessmentInput:
+      type: object
+      required: [outcome, reasons]
+      properties:
+        responseId: { type: ["integer", "null"] }
+        outcome: { type: string, enum: [accepted, disputed, unresolved, clarification_required] }
+        reasons: { type: string, minLength: 1 }
+    InvestigationQueryDetail:
+      allOf:
+        - $ref: "#/components/schemas/InvestigationQuery"
+        - type: object
+          required: [responses, assessments, followUps, relatedTransactions, history]
+          properties:
+            responses: { type: array, items: { $ref: "#/components/schemas/QueryResponse" } }
+            assessments: { type: array, items: { $ref: "#/components/schemas/Assessment" } }
+            followUps: { type: array, items: { $ref: "#/components/schemas/InvestigationQuery" } }
+            relatedTransactions: { type: array, items: { $ref: "#/components/schemas/Transaction" } }
+            history: { type: array, items: { $ref: "#/components/schemas/AuditLog" } }
+    DraftResponse:
+      type: object
+      required: [available, body, citations, gaps]
+      properties:
+        available: { type: boolean, description: False when the AI service is unavailable }
+        body: { type: string }
+        citations: { type: array, items: { type: string } }
+        gaps: { type: array, items: { type: string } }
+        message: { type: ["string", "null"] }
+
+    Document:
+      type: object
+      required: [id, caseId, name, category, objectPath, sha256, sizeBytes, contentType, version, isArchived, transactionIds, createdAt]
+      properties:
+        id: { type: integer }
+        caseId: { type: integer }
+        name: { type: string }
+        category:
+          type: string
+          enum: [bank_statement, itr, ais_tis, form_16, salary_slip, loan_document, property_deed, registration_receipt, valuation_report, gift_deed, inheritance_document, investment_statement, insurance_record, notice, legal_judgment, affidavit, other]
+        description: { type: ["string", "null"] }
+        objectPath: { type: string }
+        sha256: { type: string }
+        sizeBytes: { type: integer }
+        contentType: { type: string }
+        version: { type: integer }
+        previousVersionId: { type: ["integer", "null"] }
+        financialYear: { type: ["string", "null"] }
+        isArchived: { type: boolean }
+        isDuplicate: { type: boolean, description: Another document in this case has the same hash }
+        transactionIds: { type: array, items: { type: integer } }
+        uploadedBy: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    DocumentInput:
+      type: object
+      required: [name, category, objectPath, sha256, sizeBytes, contentType]
+      properties:
+        name: { type: string, minLength: 1 }
+        category:
+          type: string
+          enum: [bank_statement, itr, ais_tis, form_16, salary_slip, loan_document, property_deed, registration_receipt, valuation_report, gift_deed, inheritance_document, investment_statement, insurance_record, notice, legal_judgment, affidavit, other]
+        description: { type: ["string", "null"] }
+        objectPath: { type: string }
+        sha256: { type: string, minLength: 64, maxLength: 64 }
+        sizeBytes: { type: integer }
+        contentType: { type: string }
+        financialYear: { type: ["string", "null"] }
+        previousVersionId: { type: ["integer", "null"] }
+    DocumentUpdate:
+      type: object
+      properties:
+        category:
+          type: string
+          enum: [bank_statement, itr, ais_tis, form_16, salary_slip, loan_document, property_deed, registration_receipt, valuation_report, gift_deed, inheritance_document, investment_statement, insurance_record, notice, legal_judgment, affidavit, other]
+        description: { type: ["string", "null"] }
+        financialYear: { type: ["string", "null"] }
+        transactionIds: { type: array, items: { type: integer } }
+
+    LegalReference:
+      type: object
+      required: [id, sourceType, title, categories, verificationStatus, bindingStatus, createdAt]
+      properties:
+        id: { type: integer }
+        sourceType: { type: string, enum: [judgment, statute, circular, rule, notification] }
+        title: { type: string }
+        court: { type: ["string", "null"] }
+        decisionDate: { type: ["string", "null"], format: date }
+        caseNumber: { type: ["string", "null"] }
+        citation: { type: ["string", "null"] }
+        provision: { type: ["string", "null"] }
+        sourceUrl: { type: ["string", "null"] }
+        categories: { type: array, items: { type: string } }
+        legalIssue: { type: ["string", "null"] }
+        summary: { type: ["string", "null"] }
+        principle: { type: ["string", "null"] }
+        relevantParagraphs: { type: ["string", "null"], description: Paragraph numbers and extracts as recorded from the verified source }
+        subsequentTreatment: { type: ["string", "null"] }
+        bindingStatus: { type: string, enum: [binding, persuasive, not_assessed] }
+        verificationStatus: { type: string, enum: [unverified, verified, disputed] }
+        verifiedBy: { type: ["string", "null"] }
+        verifiedAt: { type: ["string", "null"], format: date-time }
+        verificationNote: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    LegalReferenceInput:
+      type: object
+      required: [sourceType, title]
+      properties:
+        sourceType: { type: string, enum: [judgment, statute, circular, rule, notification] }
+        title: { type: string, minLength: 1 }
+        court: { type: ["string", "null"] }
+        decisionDate: { type: ["string", "null"], format: date }
+        caseNumber: { type: ["string", "null"] }
+        citation: { type: ["string", "null"] }
+        provision: { type: ["string", "null"] }
+        sourceUrl: { type: ["string", "null"] }
+        categories: { type: array, items: { type: string } }
+        legalIssue: { type: ["string", "null"] }
+        summary: { type: ["string", "null"] }
+        principle: { type: ["string", "null"] }
+        relevantParagraphs: { type: ["string", "null"] }
+        subsequentTreatment: { type: ["string", "null"] }
+        bindingStatus: { type: string, enum: [binding, persuasive, not_assessed] }
+    LegalVerificationInput:
+      type: object
+      required: [verificationStatus, note]
+      properties:
+        verificationStatus: { type: string, enum: [verified, disputed, unverified] }
+        note: { type: string, minLength: 1, description: What source was checked and how }
+    CaseLegalLink:
+      type: object
+      required: [id, caseId, legalReferenceId, reference, createdAt]
+      properties:
+        id: { type: integer }
+        caseId: { type: integer }
+        legalReferenceId: { type: integer }
+        queryId: { type: ["integer", "null"] }
+        relevanceNote: { type: ["string", "null"] }
+        reference: { $ref: "#/components/schemas/LegalReference" }
+        createdAt: { type: string, format: date-time }
+    CaseLegalLinkInput:
+      type: object
+      required: [legalReferenceId]
+      properties:
+        legalReferenceId: { type: integer }
+        queryId: { type: ["integer", "null"] }
+        relevanceNote: { type: ["string", "null"] }
+
+    AssistantMessage:
+      type: object
+      required: [id, caseId, role, content, createdAt]
+      properties:
+        id: { type: integer }
+        caseId: { type: integer }
+        role: { type: string, enum: [user, assistant] }
+        content: { type: string, description: Markdown; assistant answers label facts as Verified fact / User-provided / AI suggestion / Missing information }
+        citations:
+          type: array
+          items:
+            type: object
+            required: [kind, id, label]
+            properties:
+              kind: { type: string, enum: [transaction, document, asset, legal_reference, ledger_entry] }
+              id: { type: integer }
+              label: { type: string }
+        available: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    AssistantQuestion:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string, minLength: 1 }
+
+    ReportType:
+      type: object
+      required: [key, name, description, formats]
+      properties:
+        key: { type: string }
+        name: { type: string }
+        description: { type: string }
+        formats: { type: array, items: { type: string, enum: [xlsx, pdf, docx] } }
+    GeneratedReport:
+      type: object
+      required: [id, caseId, reportType, format, createdAt]
+      properties:
+        id: { type: integer }
+        caseId: { type: integer }
+        reportType: { type: string }
+        format: { type: string }
+        generatedBy: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+
+    AuditLog:
+      type: object
+      required: [id, action, entityType, createdAt]
+      properties:
+        id: { type: integer }
+        caseId: { type: ["integer", "null"] }
+        caseTitle: { type: ["string", "null"] }
+        userName: { type: ["string", "null"] }
+        action: { type: string }
+        entityType: { type: string }
+        entityId: { type: ["integer", "null"] }
+        summary: { type: ["string", "null"] }
+        previousValue: { type: ["string", "null"] }
+        newValue: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }

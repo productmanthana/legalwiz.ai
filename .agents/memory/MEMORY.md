@@ -1,0 +1,1 @@
+- [Zod dates vs Drizzle strings](fintrace-codegen-dates.md) — keep orval zod from coercing dates; server never zod-parses responses.
