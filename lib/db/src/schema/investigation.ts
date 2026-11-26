@@ -61,6 +61,15 @@ export const documentsTable = pgTable("documents", {
   isArchived: boolean("is_archived").notNull().default(false),
   transactionIds: jsonb("transaction_ids").$type<number[]>().notNull().default([]),
   uploadedBy: text("uploaded_by"),
+  /** Search indexing (Weaviate): not_indexed | queued | processing | indexed | failed */
+  indexStatus: text("index_status").notNull().default("not_indexed"),
+  /** How content was extracted: text | vision | mixed */
+  indexMethod: text("index_method"),
+  indexedPages: integer("indexed_pages").notNull().default(0),
+  visionPages: integer("vision_pages").notNull().default(0),
+  indexedChunks: integer("indexed_chunks").notNull().default(0),
+  indexError: text("index_error"),
+  indexedAt: timestamp("indexed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("documents_case_idx").on(t.caseId)]);
 

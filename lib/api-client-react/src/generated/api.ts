@@ -6551,6 +6551,80 @@ export const useArchiveDocument = <TError = ErrorType<unknown>,
       return useMutation(getArchiveDocumentMutationOptions(options), queryClient);
     }
 
+export const getReindexDocumentUrl = (documentId: number,) => {
+
+
+
+
+  return `/api/documents/${documentId}/reindex`
+}
+
+/**
+ * @summary Re-run text/vision extraction and search indexing for a document
+ */
+export const reindexDocument = async (documentId: number, options?: Parameters<typeof customFetch>[1]): Promise<Document> => {
+
+  return customFetch<Document>(getReindexDocumentUrl(documentId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getReindexDocumentMutationKey = () => ['reindexDocument'] as const;
+
+export const getReindexDocumentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reindexDocument>>, TError,ReindexDocumentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reindexDocument>>, TError,ReindexDocumentMutationVariables, TContext> => {
+
+const mutationKey = getReindexDocumentMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reindexDocument>>, ReindexDocumentMutationVariables> = (props) => {
+          const {documentId} = props ?? {};
+
+          return  reindexDocument(documentId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReindexDocumentMutationResult = NonNullable<Awaited<ReturnType<typeof reindexDocument>>>
+
+    export type ReindexDocumentMutationError = ErrorType<unknown>
+    export type ReindexDocumentMutationVariables = {documentId: number}
+
+    /**
+ * @summary Re-run text/vision extraction and search indexing for a document
+ */
+export const useReindexDocument = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reindexDocument>>, TError,ReindexDocumentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof reindexDocument>>,
+        TError,
+        ReindexDocumentMutationVariables,
+        TContext
+      > => {
+      return useMutation(getReindexDocumentMutationOptions(options), queryClient);
+    }
+
 export const getListLegalReferencesUrl = (params?: ListLegalReferencesParams,) => {
   const normalizedParams = new URLSearchParams();
 

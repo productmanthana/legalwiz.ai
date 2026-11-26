@@ -1014,6 +1014,19 @@ paths:
       summary: Archive a document (original file retained)
       responses:
         "204": { description: Archived }
+  /documents/{documentId}/reindex:
+    parameters:
+      - { name: documentId, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: reindexDocument
+      tags: [documents]
+      summary: Re-run text/vision extraction and search indexing for a document
+      responses:
+        "202":
+          description: Queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Document" }
 
   /legal-references:
     get:
@@ -2156,6 +2169,16 @@ components:
         isDuplicate: { type: boolean, description: Another document in this case has the same hash }
         transactionIds: { type: array, items: { type: integer } }
         uploadedBy: { type: ["string", "null"] }
+        indexStatus:
+          type: string
+          enum: [not_indexed, queued, processing, indexed, failed]
+          description: Search indexing status
+        indexMethod: { type: ["string", "null"], description: "text | vision | mixed" }
+        indexedPages: { type: integer }
+        visionPages: { type: integer, description: Pages read by the vision model (scanned or containing images) }
+        indexedChunks: { type: integer }
+        indexError: { type: ["string", "null"] }
+        indexedAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string, format: date-time }
     DocumentInput:
       type: object

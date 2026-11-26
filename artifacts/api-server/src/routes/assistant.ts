@@ -17,6 +17,7 @@ import { intParam, loadCase } from "../lib/access";
 import { audit } from "../lib/audit";
 import { aiConfigured, completeJson, GUARDRAILS } from "../lib/ai";
 import { blindSpots, daCalculation } from "../lib/schedules";
+import { searchCaseChunks, weaviateConfigured } from "../lib/weaviate";
 
 const router: IRouter = Router();
 
@@ -69,6 +70,16 @@ router.post("/cases/:caseId/assistant/messages", async (req, res): Promise<void>
       .where(eq(caseLegalLinksTable.caseId, caseId)),
   ]);
   const [da, spots] = await Promise.all([daCalculation(ctx.c, false), blindSpots(caseId)]);
+  // Relevant passages from this case's indexed documents (Weaviate tenant = this case only).
+  const liveDocIds = new Set(docs.map((d) => d.id));
+  const passages = weaviateConfigured()
+    ? await searchCaseChunks(caseId, parsed.data.message, 8)
+        .then((hits) => hits.filter((h) => liveDocIds.has(h.documentId)))
+        .catch((err) => {
+          req.log.error({ err }, "Document search failed");
+          return [];
+        })
+    : [];
   const history = await db
     .select()
     .from(assistantMessagesTable)
@@ -86,6 +97,7 @@ router.post("/cases/:caseId/assistant/messages", async (req, res): Promise<void>
     family: family.map((f) => ({ name: f.name, relationship: f.relationship, independentIncome: f.hasIndependentIncome, occupation: f.occupation })),
     ledgerEntries: entries.map((e) => ({ id: e.id, type: e.entryType, category: e.category, amount: e.amount, date: e.entryDate, status: e.verificationStatus })),
     documents: docs.map((d) => ({ id: d.id, name: d.name, category: d.category, fy: d.financialYear })),
+    documentPassages: passages.map((p) => ({ documentId: p.documentId, document: p.documentName, page: p.pageNumber, readBy: p.method === "text" ? "text extraction" : "vision model", text: p.content })),
     daWorking: { components: da.components.map((c) => ({ code: c.code, amount: c.amount })), disproportion: da.disproportion, percent: da.disproportionPercent, missing: da.missingInformation },
     blindSpots: spots.map((s) => ({ title: s.title, severity: s.severity, status: s.reviewStatus })),
     legalReferences: links.map((l) => ({ id: l.ref.id, title: l.ref.title, citation: l.ref.citation, verificationStatus: l.ref.verificationStatus, principle: l.ref.principle })),
@@ -93,10 +105,11 @@ router.post("/cases/:caseId/assistant/messages", async (req, res): Promise<void>
   const convo = history.slice(-10).map((m) => `${m.role.toUpperCase()}: ${m.content}`).join("\n\n");
 
   try {
-    const out = await completeJson<{ answer?: string; citations?: { kind?: string; id?: number }[] }>(
+    const out = await completeJson<{ answer?: string; citations?: { kind?: string; id?: number; page?: number }[] }>(
       `${GUARDRAILS}
 You answer questions about one case using the JSON case data supplied. Format the answer as concise Markdown. Prefix each key point with a bold label: **Verified fact**, **User-provided**, **AI suggestion**, or **Missing information**.
-Return JSON: {"answer": string, "citations": [{"kind": "transaction"|"document"|"asset"|"legal_reference"|"ledger_entry", "id": number}]} citing the records you relied on by id.`,
+documentPassages are excerpts retrieved from the case's uploaded documents; quote them with the document name and page (e.g. "Sale deed, p. 4"). Passages "read by vision model" were transcribed from scanned pages or images and must be checked against the original.
+Return JSON: {"answer": string, "citations": [{"kind": "transaction"|"document"|"asset"|"legal_reference"|"ledger_entry", "id": number, "page"?: number}]} citing the records you relied on by id (for a document passage use its documentId and page).`,
       `CASE DATA:\n${JSON.stringify(context)}\n\nCONVERSATION:\n${convo}`,
     );
     // Validate every citation against the case; drop anything the model invented.
@@ -111,8 +124,10 @@ Return JSON: {"answer": string, "citations": [{"kind": "transaction"|"document"|
     let dropped = 0;
     for (const c of out.citations ?? []) {
       const kind = c.kind as Citation["kind"];
-      const label = lookups[kind]?.get(Number(c.id));
-      if (label && !citations.some((x) => x.kind === kind && x.id === c.id)) citations.push({ kind, id: Number(c.id), label });
+      const base = lookups[kind]?.get(Number(c.id));
+      const page = kind === "document" && passages.some((p) => p.documentId === Number(c.id) && p.pageNumber === Number(c.page)) ? Number(c.page) : null;
+      const label = base && page ? `${base}, p. ${page}` : base;
+      if (label && !citations.some((x) => x.kind === kind && x.id === Number(c.id) && x.label === label)) citations.push({ kind, id: Number(c.id), label });
       else if (!label) dropped++;
     }
     let answer = out.answer?.trim() || "No answer was produced.";

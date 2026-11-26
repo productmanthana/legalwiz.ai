@@ -32,6 +32,7 @@ async function buildAll() {
       "pdfkit",
       "fontkit",
       "exceljs",
+      "weaviate-client",
       "sharp",
       "better-sqlite3",
       "sqlite3",

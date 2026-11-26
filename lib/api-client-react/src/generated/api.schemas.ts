@@ -128,6 +128,20 @@ export const DocumentCategory = {
   other: 'other',
 } as const;
 
+/**
+ * Search indexing status
+ */
+export type DocumentIndexStatus = typeof DocumentIndexStatus[keyof typeof DocumentIndexStatus];
+
+
+export const DocumentIndexStatus = {
+  not_indexed: 'not_indexed',
+  queued: 'queued',
+  processing: 'processing',
+  indexed: 'indexed',
+  failed: 'failed',
+} as const;
+
 export interface Document {
   id: number;
   caseId: number;
@@ -150,6 +164,21 @@ export interface Document {
   transactionIds: number[];
   /** @nullable */
   uploadedBy?: string | null;
+  /** Search indexing status */
+  indexStatus?: DocumentIndexStatus;
+  /**
+     * text | vision | mixed
+     * @nullable
+     */
+  indexMethod?: string | null;
+  indexedPages?: number;
+  /** Pages read by the vision model (scanned or containing images) */
+  visionPages?: number;
+  indexedChunks?: number;
+  /** @nullable */
+  indexError?: string | null;
+  /** @nullable */
+  indexedAt?: string | null;
   createdAt: string;
 }
 

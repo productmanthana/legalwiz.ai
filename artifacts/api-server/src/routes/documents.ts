@@ -6,6 +6,8 @@ import { intParam, loadCase } from "../lib/access";
 import { audit, diff } from "../lib/audit";
 import { serializeDocs } from "../lib/serialize";
 import { ObjectNotFoundError, ObjectStorageService } from "../lib/objectStorage";
+import { queueDocumentIndex } from "../lib/documentIndex";
+import { deleteDocumentChunks, weaviateConfigured } from "../lib/weaviate";
 
 const router: IRouter = Router();
 const storage = new ObjectStorageService();
@@ -66,11 +68,14 @@ router.post("/cases/:caseId/documents", async (req, res): Promise<void> => {
     version = prev.version + 1;
     // The earlier version is preserved (archived), never deleted.
     await db.update(documentsTable).set({ isArchived: true }).where(eq(documentsTable.id, prev.id));
+    removeChunks(req, ctx.c.id, prev.id);
   }
   const [d] = await db
     .insert(documentsTable)
-    .values({ ...b, sha256: b.sha256.toLowerCase(), caseId: ctx.c.id, version, uploadedBy: ctx.user.displayName })
+    .values({ ...b, sha256: b.sha256.toLowerCase(), caseId: ctx.c.id, version, uploadedBy: ctx.user.displayName, indexStatus: weaviateConfigured() ? "queued" : "not_indexed" })
     .returning();
+  // Text/vision extraction and Weaviate indexing run in the background.
+  await queueDocumentIndex(d!.id);
   const all = await allDocs(ctx.c.id);
   const [ser] = serializeDocs([d!], all);
   await audit(req, {
@@ -124,8 +129,33 @@ router.delete("/documents/:documentId", async (req, res): Promise<void> => {
   const ctx = await loadCase(req, res, d.caseId, "edit");
   if (!ctx) return;
   await db.update(documentsTable).set({ isArchived: true }).where(eq(documentsTable.id, d.id));
+  removeChunks(req, ctx.c.id, d.id);
   await audit(req, { caseId: ctx.c.id, caseTitle: ctx.c.title, action: "document.archived", entityType: "document", entityId: d.id, summary: `Archived "${d.name}" (file retained)` });
   res.sendStatus(204);
 });
+
+router.post("/documents/:documentId/reindex", async (req, res): Promise<void> => {
+  const [d] = await db.select().from(documentsTable).where(eq(documentsTable.id, intParam(req, "documentId")));
+  if (!d || d.isArchived) {
+    res.status(404).json({ error: "Document not found" });
+    return;
+  }
+  const ctx = await loadCase(req, res, d.caseId, "edit");
+  if (!ctx) return;
+  if (!weaviateConfigured()) {
+    res.status(503).json({ error: "Document search (Weaviate) is not configured." });
+    return;
+  }
+  await queueDocumentIndex(d.id);
+  await audit(req, { caseId: ctx.c.id, caseTitle: ctx.c.title, action: "document.reindexed", entityType: "document", entityId: d.id, summary: `Re-indexed "${d.name}" for search` });
+  const [u] = await db.select().from(documentsTable).where(eq(documentsTable.id, d.id));
+  res.status(202).json(serializeDocs([u!], await allDocs(ctx.c.id))[0]);
+});
+
+/** Archived documents must not surface in search; removal runs in the background. */
+function removeChunks(req: { log: { error: (o: object, m: string) => void } }, caseId: number, documentId: number) {
+  if (!weaviateConfigured()) return;
+  deleteDocumentChunks(caseId, documentId).catch((err) => req.log.error({ err, documentId }, "Failed to remove document passages from search"));
+}
 
 export default router;

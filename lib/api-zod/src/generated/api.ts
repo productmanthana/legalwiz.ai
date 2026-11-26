@@ -113,6 +113,13 @@ export const GetDashboardSummaryResponse = zod.object({
   "isDuplicate": zod.boolean().optional().describe('Another document in this case has the same hash'),
   "transactionIds": zod.array(zod.int()),
   "uploadedBy": zod.string().nullish(),
+  "indexStatus": zod.enum(['not_indexed', 'queued', 'processing', 'indexed', 'failed']).optional().describe('Search indexing status'),
+  "indexMethod": zod.string().nullish().describe('text | vision | mixed'),
+  "indexedPages": zod.int().optional(),
+  "visionPages": zod.int().optional().describe('Pages read by the vision model (scanned or containing images)'),
+  "indexedChunks": zod.int().optional(),
+  "indexError": zod.string().nullish(),
+  "indexedAt": zod.iso.datetime({"offset":true}).nullish(),
   "createdAt": zod.iso.datetime({"offset":true})
 })).optional()
 })
@@ -2152,6 +2159,13 @@ export const ListDocumentsResponseItem = zod.object({
   "isDuplicate": zod.boolean().optional().describe('Another document in this case has the same hash'),
   "transactionIds": zod.array(zod.int()),
   "uploadedBy": zod.string().nullish(),
+  "indexStatus": zod.enum(['not_indexed', 'queued', 'processing', 'indexed', 'failed']).optional().describe('Search indexing status'),
+  "indexMethod": zod.string().nullish().describe('text | vision | mixed'),
+  "indexedPages": zod.int().optional(),
+  "visionPages": zod.int().optional().describe('Pages read by the vision model (scanned or containing images)'),
+  "indexedChunks": zod.int().optional(),
+  "indexError": zod.string().nullish(),
+  "indexedAt": zod.iso.datetime({"offset":true}).nullish(),
   "createdAt": zod.iso.datetime({"offset":true})
 })
 export const ListDocumentsResponse = zod.array(ListDocumentsResponseItem)
@@ -2199,6 +2213,13 @@ export const CreateDocumentResponse = zod.object({
   "isDuplicate": zod.boolean().optional().describe('Another document in this case has the same hash'),
   "transactionIds": zod.array(zod.int()),
   "uploadedBy": zod.string().nullish(),
+  "indexStatus": zod.enum(['not_indexed', 'queued', 'processing', 'indexed', 'failed']).optional().describe('Search indexing status'),
+  "indexMethod": zod.string().nullish().describe('text | vision | mixed'),
+  "indexedPages": zod.int().optional(),
+  "visionPages": zod.int().optional().describe('Pages read by the vision model (scanned or containing images)'),
+  "indexedChunks": zod.int().optional(),
+  "indexError": zod.string().nullish(),
+  "indexedAt": zod.iso.datetime({"offset":true}).nullish(),
   "createdAt": zod.iso.datetime({"offset":true})
 })
 
@@ -2231,6 +2252,13 @@ export const UpdateDocumentResponse = zod.object({
   "isDuplicate": zod.boolean().optional().describe('Another document in this case has the same hash'),
   "transactionIds": zod.array(zod.int()),
   "uploadedBy": zod.string().nullish(),
+  "indexStatus": zod.enum(['not_indexed', 'queued', 'processing', 'indexed', 'failed']).optional().describe('Search indexing status'),
+  "indexMethod": zod.string().nullish().describe('text | vision | mixed'),
+  "indexedPages": zod.int().optional(),
+  "visionPages": zod.int().optional().describe('Pages read by the vision model (scanned or containing images)'),
+  "indexedChunks": zod.int().optional(),
+  "indexError": zod.string().nullish(),
+  "indexedAt": zod.iso.datetime({"offset":true}).nullish(),
   "createdAt": zod.iso.datetime({"offset":true})
 })
 
@@ -2243,6 +2271,41 @@ export const ArchiveDocumentParams = zod.object({
 })
 
 export const ArchiveDocumentResponse = zod.void()
+
+
+/**
+ * @summary Re-run text/vision extraction and search indexing for a document
+ */
+export const ReindexDocumentParams = zod.object({
+  "documentId": zod.coerce.number().int()
+})
+
+export const ReindexDocumentResponse = zod.object({
+  "id": zod.int(),
+  "caseId": zod.int(),
+  "name": zod.string(),
+  "category": zod.enum(['bank_statement', 'itr', 'ais_tis', 'form_16', 'salary_slip', 'loan_document', 'property_deed', 'registration_receipt', 'valuation_report', 'gift_deed', 'inheritance_document', 'investment_statement', 'insurance_record', 'notice', 'legal_judgment', 'affidavit', 'other']),
+  "description": zod.string().nullish(),
+  "objectPath": zod.string(),
+  "sha256": zod.string(),
+  "sizeBytes": zod.int(),
+  "contentType": zod.string(),
+  "version": zod.int(),
+  "previousVersionId": zod.int().nullish(),
+  "financialYear": zod.string().nullish(),
+  "isArchived": zod.boolean(),
+  "isDuplicate": zod.boolean().optional().describe('Another document in this case has the same hash'),
+  "transactionIds": zod.array(zod.int()),
+  "uploadedBy": zod.string().nullish(),
+  "indexStatus": zod.enum(['not_indexed', 'queued', 'processing', 'indexed', 'failed']).optional().describe('Search indexing status'),
+  "indexMethod": zod.string().nullish().describe('text | vision | mixed'),
+  "indexedPages": zod.int().optional(),
+  "visionPages": zod.int().optional().describe('Pages read by the vision model (scanned or containing images)'),
+  "indexedChunks": zod.int().optional(),
+  "indexError": zod.string().nullish(),
+  "indexedAt": zod.iso.datetime({"offset":true}).nullish(),
+  "createdAt": zod.iso.datetime({"offset":true})
+})
 
 
 export const ListLegalReferencesQueryParams = zod.object({

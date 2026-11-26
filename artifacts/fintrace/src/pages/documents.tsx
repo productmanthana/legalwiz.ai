@@ -13,6 +13,7 @@ import { EntityFormDialog, type FieldDef } from "@/components/entity-form";
 import { DOC_CATEGORIES, fdatetime, human, n, errMsg, opts } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { DocumentIndexTag, ReindexButton, isIndexing } from "@/components/document-index-status";
 
 async function sha256(file: File) {
   const buf = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
@@ -70,7 +71,11 @@ function Body({ c }: { c: Case }) {
   const a = access(c);
   const inv = useInvalidate(); const { toast } = useToast();
   const [cat, setCat] = useState(""); const [s, setS] = useState("");
-  const q = useListDocuments(caseId, { category: cat || undefined, search: s || undefined });
+  const params = { category: cat || undefined, search: s || undefined };
+  const q = useListDocuments(caseId, params, {
+    // Poll while any document is still being read and indexed in the background.
+    query: { queryKey: getListDocumentsQueryKey(caseId, params), refetchInterval: (query) => (query.state.data?.some(isIndexing) ? 4000 : false) },
+  });
   const upd = useUpdateDocument(); const arc = useArchiveDocument();
   const [up, setUp] = useState<{ open: boolean; prev?: Document | null }>({ open: false });
   const [edit, setEdit] = useState<Document | null>(null);
@@ -99,7 +104,7 @@ function Body({ c }: { c: Case }) {
             <tbody className="stagger">{q.data.map((d) => (
               <tr key={d.id} className={cn(d.isArchived && "opacity-55")} data-testid={`row-document-${d.id}`}>
                 <td className="max-w-[300px]"><div className="flex items-center gap-1.5"><FileText className="h-4 w-4 text-[hsl(var(--teal))] shrink-0" /><span className="truncate font-medium">{d.name}</span></div>
-                  <div className="flex gap-1 mt-0.5">{d.version > 1 && <Tag tone="navy"><Layers className="h-3 w-3" />v{d.version}</Tag>}{d.isDuplicate && <Tag tone="brass"><Copy className="h-3 w-3" />Duplicate</Tag>}{d.isArchived && <Tag>Archived</Tag>}{!!d.transactionIds.length && <Tag tone="teal">{d.transactionIds.length} txns</Tag>}</div>
+                  <div className="flex gap-1 mt-0.5">{d.version > 1 && <Tag tone="navy"><Layers className="h-3 w-3" />v{d.version}</Tag>}{d.isDuplicate && <Tag tone="brass"><Copy className="h-3 w-3" />Duplicate</Tag>}{d.isArchived && <Tag>Archived</Tag>}{!!d.transactionIds.length && <Tag tone="teal">{d.transactionIds.length} txns</Tag>}<DocumentIndexTag d={d} /></div>
                   {d.description && <div className="text-[11px] text-muted-foreground truncate">{d.description}</div>}</td>
                 <td>{human(d.category)}</td><td className="num">{d.financialYear ?? "—"}</td>
                 <td className="text-right num">{(d.sizeBytes / 1024).toFixed(1)} KB</td>
@@ -110,6 +115,7 @@ function Body({ c }: { c: Case }) {
                   {a.canEdit && !d.isArchived && <>
                     <Button size="icon" variant="ghost" title="Upload new version" onClick={() => setUp({ open: true, prev: d })} data-testid={`button-version-${d.id}`}><Layers /></Button>
                     <Button size="icon" variant="ghost" onClick={() => setEdit(d)} data-testid={`button-edit-document-${d.id}`}><Pencil /></Button>
+                    {d.indexStatus !== "not_indexed" && <ReindexButton d={d} caseId={caseId} />}
                     <ConfirmButton title="Archive document?" description="Archived documents stay in the audit record but are hidden from reports." confirmLabel="Archive" onConfirm={() => arc.mutate({ documentId: d.id }, { onSuccess: () => inv(getListDocumentsQueryKey(caseId)), onError: fail })} trigger={<Button size="icon" variant="ghost" data-testid={`button-archive-${d.id}`}><Archive /></Button>} />
                   </>}
                 </div></td>

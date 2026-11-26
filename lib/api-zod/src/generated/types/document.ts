@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DocumentCategory } from './documentCategory';
+import type { DocumentIndexStatus } from './documentIndexStatus';
 
 export interface Document {
   id: number;
@@ -29,5 +30,20 @@ export interface Document {
   transactionIds: number[];
   /** @nullable */
   uploadedBy?: string | null;
+  /** Search indexing status */
+  indexStatus?: DocumentIndexStatus;
+  /**
+     * text | vision | mixed
+     * @nullable
+     */
+  indexMethod?: string | null;
+  indexedPages?: number;
+  /** Pages read by the vision model (scanned or containing images) */
+  visionPages?: number;
+  indexedChunks?: number;
+  /** @nullable */
+  indexError?: string | null;
+  /** @nullable */
+  indexedAt?: string | null;
   createdAt: string;
 }
