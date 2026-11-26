@@ -167,3 +167,20 @@ export const liabilitiesTable = pgTable("liabilities", {
   documentIds: jsonb("document_ids").$type<number[]>().notNull().default([]),
   notes: text("notes"),
 });
+
+/**
+ * Income Tax figures as reported in a tax record (ITR, AIS, TIS, Form 26AS, Form 16), one row per head.
+ * Entered by the user from the uploaded document; compared against bank credits, never merged into them.
+ */
+export const taxDeclarationsTable = pgTable("tax_declarations", {
+  id: serial("id").primaryKey(),
+  caseId: integer("case_id").notNull().references(() => casesTable.id, { onDelete: "cascade" }),
+  financialYear: text("financial_year").notNull(),
+  source: text("source").notNull(),
+  head: text("head").notNull(),
+  amount: money("amount").notNull(),
+  description: text("description"),
+  documentId: integer("document_id"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("tax_decl_case_idx").on(t.caseId)]);

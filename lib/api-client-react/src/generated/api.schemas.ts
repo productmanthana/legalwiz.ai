@@ -1135,6 +1135,155 @@ export interface BlindSpotReview {
   reviewNote?: string | null;
 }
 
+export type TaxDeclarationSource = typeof TaxDeclarationSource[keyof typeof TaxDeclarationSource];
+
+
+export const TaxDeclarationSource = {
+  itr: 'itr',
+  ais: 'ais',
+  tis: 'tis',
+  form_26as: 'form_26as',
+  form_16: 'form_16',
+} as const;
+
+export type TaxDeclarationHead = typeof TaxDeclarationHead[keyof typeof TaxDeclarationHead];
+
+
+export const TaxDeclarationHead = {
+  salary: 'salary',
+  house_property: 'house_property',
+  business_profession: 'business_profession',
+  capital_gains: 'capital_gains',
+  other_sources: 'other_sources',
+  exempt_income: 'exempt_income',
+} as const;
+
+export interface TaxDeclaration {
+  id: number;
+  caseId: number;
+  /** e.g. 2019-20 */
+  financialYear: string;
+  /** e.g. 2020-21 (derived) */
+  assessmentYear: string;
+  source: TaxDeclarationSource;
+  head: TaxDeclarationHead;
+  amount: number;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  documentId?: number | null;
+  /** @nullable */
+  notes?: string | null;
+  createdAt: string;
+}
+
+export type TaxDeclarationInputSource = typeof TaxDeclarationInputSource[keyof typeof TaxDeclarationInputSource];
+
+
+export const TaxDeclarationInputSource = {
+  itr: 'itr',
+  ais: 'ais',
+  tis: 'tis',
+  form_26as: 'form_26as',
+  form_16: 'form_16',
+} as const;
+
+export type TaxDeclarationInputHead = typeof TaxDeclarationInputHead[keyof typeof TaxDeclarationInputHead];
+
+
+export const TaxDeclarationInputHead = {
+  salary: 'salary',
+  house_property: 'house_property',
+  business_profession: 'business_profession',
+  capital_gains: 'capital_gains',
+  other_sources: 'other_sources',
+  exempt_income: 'exempt_income',
+} as const;
+
+export interface TaxDeclarationInput {
+  /** @pattern ^\d{4}-\d{2}$ */
+  financialYear: string;
+  source: TaxDeclarationInputSource;
+  head: TaxDeclarationInputHead;
+  /** @minimum 0 */
+  amount: number;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  documentId?: number | null;
+  /** @nullable */
+  notes?: string | null;
+}
+
+export interface TaxSourceFigures {
+  /** @nullable */
+  itr: number | null;
+  /** @nullable */
+  ais: number | null;
+  /** @nullable */
+  tis: number | null;
+  /** @nullable */
+  form_26as: number | null;
+  /** @nullable */
+  form_16: number | null;
+}
+
+export type TaxHeadComparisonStatus = typeof TaxHeadComparisonStatus[keyof typeof TaxHeadComparisonStatus];
+
+
+export const TaxHeadComparisonStatus = {
+  consistent: 'consistent',
+  difference: 'difference',
+  itr_missing: 'itr_missing',
+  no_data: 'no_data',
+} as const;
+
+export interface TaxHeadComparison {
+  head: string;
+  /** Approved bank credits mapped to this head */
+  bankCredits: number;
+  reported: TaxSourceFigures;
+  /**
+     * bankCredits - ITR (null when no ITR figure)
+     * @nullable
+     */
+  bankVsItr: number | null;
+  /**
+     * AIS - ITR (null unless both are recorded)
+     * @nullable
+     */
+  aisVsItr: number | null;
+  status: TaxHeadComparisonStatus;
+  transactionIds: number[];
+}
+
+export interface TaxYearComparison {
+  financialYear: string;
+  assessmentYear: string;
+  heads: TaxHeadComparison[];
+  /** All credits excluding approved own-account transfers / duplicates */
+  totalCredits: number;
+  incomeCredits: number;
+  /** Loans */
+  receiptCredits: number;
+  unclassifiedCredits: number;
+  excludedTransfers: number;
+  /**
+     * Sum of ITR heads (null when no ITR recorded)
+     * @nullable
+     */
+  declaredIncome: number | null;
+  observations: string[];
+}
+
+export interface IncomeTaxComparison {
+  years: TaxYearComparison[];
+  /** Differences at or below this amount are shown as consistent */
+  threshold: number;
+  notes: string[];
+  disclaimer: string;
+}
+
 export type AssetAssetType = typeof AssetAssetType[keyof typeof AssetAssetType];
 
 

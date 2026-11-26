@@ -1,6 +1,6 @@
 # FINTRACE
 
-Financial investigation and legal intelligence workspace for Karnataka Lokayukta disproportionate-assets (DA) cases (Income Tax scrutiny planned), used by accused persons, advocates, CAs and investigating officers.
+Financial investigation and legal intelligence workspace for Karnataka Lokayukta disproportionate-assets (DA) cases and Income Tax scrutiny, used by accused persons, advocates, CAs and investigating officers.
 
 ## Run & Operate
 
@@ -24,7 +24,7 @@ Financial investigation and legal intelligence workspace for Karnataka Lokayukta
 
 - `lib/api-spec/openapi.yaml` — API contract (source of truth); run codegen after edits
 - `lib/db/src/schema/` — Drizzle tables (users, cases, finance, investigation)
-- `artifacts/api-server/src/lib/` — engines: `statementImport`, `classify`, `reconcile`, `schedules` (I&E, DA A/B/C/D, blind spots), `reports` (xlsx/pdf/docx), `ai`, `demo`, `access`, `audit`
+- `artifacts/api-server/src/lib/` — engines: `statementImport`, `classify`, `reconcile`, `schedules` (I&E, DA A/B/C/D, blind spots), `incomeTax` (bank credits vs ITR, AIS/26AS vs ITR per head; pure `compareIncomeTax`), `reports` (xlsx/pdf/docx), `ai`, `demo`, `access`, `audit`
 - `artifacts/api-server/src/routes/` — one router per area, all behind `requireUser` except `/healthz`
 - `artifacts/fintrace/src/` — React frontend (pages per case tab, shared components)
 
@@ -38,7 +38,7 @@ Financial investigation and legal intelligence workspace for Karnataka Lokayukta
 
 ## Product
 
-Cases, bank accounts & statement import, transaction ledger with rule suggestions, reconciliation matching, income/expenditure, DA working, assets/liabilities/family, investigation queries with response approval and assessments, documents (App Storage + SHA-256), legal library, AI assistant, report exports, audit trail, labelled demo case.
+Cases, bank accounts & statement import, transaction ledger with rule suggestions, reconciliation matching, income/expenditure, DA working, Income Tax scrutiny (tax-record figures + year-wise comparison), assets/liabilities/family, investigation queries with response approval and assessments, documents (App Storage + SHA-256), legal library, AI assistant, report exports, audit trail, labelled demo case.
 
 ## User preferences
 

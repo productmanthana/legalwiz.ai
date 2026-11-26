@@ -14,6 +14,7 @@ import legalRouter from "./legal";
 import assistantRouter from "./assistant";
 import reportsRouter from "./reports";
 import storageRouter from "./storage";
+import incomeTaxRouter from "./incomeTax";
 import { requireUser } from "../lib/access";
 
 const router: IRouter = Router();
@@ -34,6 +35,7 @@ router.use(documentsRouter);
 router.use(legalRouter);
 router.use(assistantRouter);
 router.use(reportsRouter);
+router.use(incomeTaxRouter);
 router.use(storageRouter);
 
 export default router;

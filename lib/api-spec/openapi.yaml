@@ -24,6 +24,7 @@ tags:
   - name: assistant
   - name: reports
   - name: audit
+  - name: incomeTax
   - name: Storage
 paths:
   /healthz:
@@ -622,6 +623,70 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/BlindSpot" }
+
+  /cases/{caseId}/tax-declarations:
+    parameters:
+      - { name: caseId, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: listTaxDeclarations
+      tags: [incomeTax]
+      responses:
+        "200":
+          description: Figures recorded from ITR / AIS / TIS / Form 26AS / Form 16
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TaxDeclaration" }
+    post:
+      operationId: createTaxDeclaration
+      tags: [incomeTax]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TaxDeclarationInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxDeclaration" }
+  /tax-declarations/{declarationId}:
+    parameters:
+      - { name: declarationId, in: path, required: true, schema: { type: integer } }
+    patch:
+      operationId: updateTaxDeclaration
+      tags: [incomeTax]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TaxDeclarationInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxDeclaration" }
+    delete:
+      operationId: deleteTaxDeclaration
+      tags: [incomeTax]
+      responses:
+        "204": { description: Deleted }
+  /cases/{caseId}/income-tax/comparison:
+    parameters:
+      - { name: caseId, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: getIncomeTaxComparison
+      tags: [incomeTax]
+      summary: Year-wise bank credits vs declared income, and AIS / 26AS vs ITR, head by head
+      responses:
+        "200":
+          description: Comparison
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IncomeTaxComparison" }
 
   /cases/{caseId}/assets:
     parameters:
@@ -1757,6 +1822,74 @@ components:
       properties:
         reviewStatus: { type: string, enum: [open, reviewing, resolved, not_applicable] }
         reviewNote: { type: ["string", "null"] }
+    TaxDeclaration:
+      type: object
+      required: [id, caseId, financialYear, assessmentYear, source, head, amount, createdAt]
+      properties:
+        id: { type: integer }
+        caseId: { type: integer }
+        financialYear: { type: string, description: "e.g. 2019-20" }
+        assessmentYear: { type: string, description: "e.g. 2020-21 (derived)" }
+        source: { type: string, enum: [itr, ais, tis, form_26as, form_16] }
+        head: { type: string, enum: [salary, house_property, business_profession, capital_gains, other_sources, exempt_income] }
+        amount: { type: number }
+        description: { type: ["string", "null"] }
+        documentId: { type: ["integer", "null"] }
+        notes: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    TaxDeclarationInput:
+      type: object
+      required: [financialYear, source, head, amount]
+      properties:
+        financialYear: { type: string, pattern: "^\\d{4}-\\d{2}$" }
+        source: { type: string, enum: [itr, ais, tis, form_26as, form_16] }
+        head: { type: string, enum: [salary, house_property, business_profession, capital_gains, other_sources, exempt_income] }
+        amount: { type: number, minimum: 0 }
+        description: { type: ["string", "null"] }
+        documentId: { type: ["integer", "null"] }
+        notes: { type: ["string", "null"] }
+    TaxSourceFigures:
+      type: object
+      required: [itr, ais, tis, form_26as, form_16]
+      properties:
+        itr: { type: ["number", "null"] }
+        ais: { type: ["number", "null"] }
+        tis: { type: ["number", "null"] }
+        form_26as: { type: ["number", "null"] }
+        form_16: { type: ["number", "null"] }
+    TaxHeadComparison:
+      type: object
+      required: [head, bankCredits, reported, bankVsItr, aisVsItr, status, transactionIds]
+      properties:
+        head: { type: string }
+        bankCredits: { type: number, description: Approved bank credits mapped to this head }
+        reported: { $ref: "#/components/schemas/TaxSourceFigures" }
+        bankVsItr: { type: ["number", "null"], description: bankCredits - ITR (null when no ITR figure) }
+        aisVsItr: { type: ["number", "null"], description: AIS - ITR (null unless both are recorded) }
+        status: { type: string, enum: [consistent, difference, itr_missing, no_data] }
+        transactionIds: { type: array, items: { type: integer } }
+    TaxYearComparison:
+      type: object
+      required: [financialYear, assessmentYear, heads, totalCredits, incomeCredits, receiptCredits, unclassifiedCredits, excludedTransfers, declaredIncome, observations]
+      properties:
+        financialYear: { type: string }
+        assessmentYear: { type: string }
+        heads: { type: array, items: { $ref: "#/components/schemas/TaxHeadComparison" } }
+        totalCredits: { type: number, description: All credits excluding approved own-account transfers / duplicates }
+        incomeCredits: { type: number }
+        receiptCredits: { type: number, description: Loans, gifts, sale proceeds and other non-income receipts }
+        unclassifiedCredits: { type: number }
+        excludedTransfers: { type: number }
+        declaredIncome: { type: ["number", "null"], description: Sum of ITR heads (null when no ITR recorded) }
+        observations: { type: array, items: { type: string } }
+    IncomeTaxComparison:
+      type: object
+      required: [years, threshold, notes, disclaimer]
+      properties:
+        years: { type: array, items: { $ref: "#/components/schemas/TaxYearComparison" } }
+        threshold: { type: number, description: Differences at or below this amount are shown as consistent }
+        notes: { type: array, items: { type: string } }
+        disclaimer: { type: string }
 
     Asset:
       type: object

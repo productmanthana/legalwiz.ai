@@ -63,6 +63,7 @@ import type {
   GetIncomeExpenditureScheduleParams,
   HealthStatus,
   IncomeExpenditureSchedule,
+  IncomeTaxComparison,
   InvestigationPeriod,
   InvestigationPeriodInput,
   InvestigationQuery,
@@ -92,6 +93,8 @@ import type {
   ServiceStatus,
   StatementImportInput,
   StatementImportResult,
+  TaxDeclaration,
+  TaxDeclarationInput,
   Transaction,
   TransactionDetail,
   TransactionMatch,
@@ -4095,6 +4098,436 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getReviewBlindSpotMutationOptions(options), queryClient);
     }
+
+export const getListTaxDeclarationsUrl = (caseId: number,) => {
+
+
+
+
+  return `/api/cases/${caseId}/tax-declarations`
+}
+
+export const listTaxDeclarations = async (caseId: number, options?: Parameters<typeof customFetch>[1]): Promise<TaxDeclaration[]> => {
+
+  return customFetch<TaxDeclaration[]>(getListTaxDeclarationsUrl(caseId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListTaxDeclarationsQueryKey = (caseId: number,) => {
+    return [
+    `/api/cases/${caseId}/tax-declarations`
+    ] as const;
+    }
+
+
+export const getListTaxDeclarationsQueryOptions = <TData = Awaited<ReturnType<typeof listTaxDeclarations>>, TError = ErrorType<unknown>>(caseId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTaxDeclarations>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListTaxDeclarationsQueryKey(caseId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listTaxDeclarations>>> = ({ signal }) => listTaxDeclarations(caseId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: caseId !== null && caseId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listTaxDeclarations>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListTaxDeclarationsQueryResult = NonNullable<Awaited<ReturnType<typeof listTaxDeclarations>>>
+export type ListTaxDeclarationsQueryError = ErrorType<unknown>
+
+
+export function useListTaxDeclarations<TData = Awaited<ReturnType<typeof listTaxDeclarations>>, TError = ErrorType<unknown>>(
+ caseId: number, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTaxDeclarations>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listTaxDeclarations>>,
+          TError,
+          Awaited<ReturnType<typeof listTaxDeclarations>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListTaxDeclarations<TData = Awaited<ReturnType<typeof listTaxDeclarations>>, TError = ErrorType<unknown>>(
+ caseId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTaxDeclarations>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listTaxDeclarations>>,
+          TError,
+          Awaited<ReturnType<typeof listTaxDeclarations>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListTaxDeclarations<TData = Awaited<ReturnType<typeof listTaxDeclarations>>, TError = ErrorType<unknown>>(
+ caseId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTaxDeclarations>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useListTaxDeclarations<TData = Awaited<ReturnType<typeof listTaxDeclarations>>, TError = ErrorType<unknown>>(
+ caseId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTaxDeclarations>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListTaxDeclarationsQueryOptions(caseId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateTaxDeclarationUrl = (caseId: number,) => {
+
+
+
+
+  return `/api/cases/${caseId}/tax-declarations`
+}
+
+export const createTaxDeclaration = async (caseId: number,
+    taxDeclarationInput: TaxDeclarationInput, options?: Parameters<typeof customFetch>[1]): Promise<TaxDeclaration> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<TaxDeclaration>(getCreateTaxDeclarationUrl(caseId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(taxDeclarationInput)
+  }
+);}
+
+
+
+
+
+export const getCreateTaxDeclarationMutationKey = () => ['createTaxDeclaration'] as const;
+
+export const getCreateTaxDeclarationMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTaxDeclaration>>, TError,CreateTaxDeclarationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createTaxDeclaration>>, TError,CreateTaxDeclarationMutationVariables, TContext> => {
+
+const mutationKey = getCreateTaxDeclarationMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createTaxDeclaration>>, CreateTaxDeclarationMutationVariables> = (props) => {
+          const {caseId,data} = props ?? {};
+
+          return  createTaxDeclaration(caseId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateTaxDeclarationMutationResult = NonNullable<Awaited<ReturnType<typeof createTaxDeclaration>>>
+    export type CreateTaxDeclarationMutationBody = BodyType<TaxDeclarationInput>
+    export type CreateTaxDeclarationMutationError = ErrorType<unknown>
+    export type CreateTaxDeclarationMutationVariables = {caseId: number;data: BodyType<TaxDeclarationInput>}
+
+    export const useCreateTaxDeclaration = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTaxDeclaration>>, TError,CreateTaxDeclarationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createTaxDeclaration>>,
+        TError,
+        CreateTaxDeclarationMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateTaxDeclarationMutationOptions(options), queryClient);
+    }
+
+export const getUpdateTaxDeclarationUrl = (declarationId: number,) => {
+
+
+
+
+  return `/api/tax-declarations/${declarationId}`
+}
+
+export const updateTaxDeclaration = async (declarationId: number,
+    taxDeclarationInput: TaxDeclarationInput, options?: Parameters<typeof customFetch>[1]): Promise<TaxDeclaration> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<TaxDeclaration>(getUpdateTaxDeclarationUrl(declarationId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(taxDeclarationInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateTaxDeclarationMutationKey = () => ['updateTaxDeclaration'] as const;
+
+export const getUpdateTaxDeclarationMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateTaxDeclaration>>, TError,UpdateTaxDeclarationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateTaxDeclaration>>, TError,UpdateTaxDeclarationMutationVariables, TContext> => {
+
+const mutationKey = getUpdateTaxDeclarationMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateTaxDeclaration>>, UpdateTaxDeclarationMutationVariables> = (props) => {
+          const {declarationId,data} = props ?? {};
+
+          return  updateTaxDeclaration(declarationId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateTaxDeclarationMutationResult = NonNullable<Awaited<ReturnType<typeof updateTaxDeclaration>>>
+    export type UpdateTaxDeclarationMutationBody = BodyType<TaxDeclarationInput>
+    export type UpdateTaxDeclarationMutationError = ErrorType<unknown>
+    export type UpdateTaxDeclarationMutationVariables = {declarationId: number;data: BodyType<TaxDeclarationInput>}
+
+    export const useUpdateTaxDeclaration = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateTaxDeclaration>>, TError,UpdateTaxDeclarationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateTaxDeclaration>>,
+        TError,
+        UpdateTaxDeclarationMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateTaxDeclarationMutationOptions(options), queryClient);
+    }
+
+export const getDeleteTaxDeclarationUrl = (declarationId: number,) => {
+
+
+
+
+  return `/api/tax-declarations/${declarationId}`
+}
+
+export const deleteTaxDeclaration = async (declarationId: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteTaxDeclarationUrl(declarationId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteTaxDeclarationMutationKey = () => ['deleteTaxDeclaration'] as const;
+
+export const getDeleteTaxDeclarationMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTaxDeclaration>>, TError,DeleteTaxDeclarationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteTaxDeclaration>>, TError,DeleteTaxDeclarationMutationVariables, TContext> => {
+
+const mutationKey = getDeleteTaxDeclarationMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteTaxDeclaration>>, DeleteTaxDeclarationMutationVariables> = (props) => {
+          const {declarationId} = props ?? {};
+
+          return  deleteTaxDeclaration(declarationId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteTaxDeclarationMutationResult = NonNullable<Awaited<ReturnType<typeof deleteTaxDeclaration>>>
+
+    export type DeleteTaxDeclarationMutationError = ErrorType<unknown>
+    export type DeleteTaxDeclarationMutationVariables = {declarationId: number}
+
+    export const useDeleteTaxDeclaration = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTaxDeclaration>>, TError,DeleteTaxDeclarationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteTaxDeclaration>>,
+        TError,
+        DeleteTaxDeclarationMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteTaxDeclarationMutationOptions(options), queryClient);
+    }
+
+export const getGetIncomeTaxComparisonUrl = (caseId: number,) => {
+
+
+
+
+  return `/api/cases/${caseId}/income-tax/comparison`
+}
+
+/**
+ * @summary Year-wise bank credits vs declared income, and AIS / 26AS vs ITR, head by head
+ */
+export const getIncomeTaxComparison = async (caseId: number, options?: Parameters<typeof customFetch>[1]): Promise<IncomeTaxComparison> => {
+
+  return customFetch<IncomeTaxComparison>(getGetIncomeTaxComparisonUrl(caseId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetIncomeTaxComparisonQueryKey = (caseId: number,) => {
+    return [
+    `/api/cases/${caseId}/income-tax/comparison`
+    ] as const;
+    }
+
+
+export const getGetIncomeTaxComparisonQueryOptions = <TData = Awaited<ReturnType<typeof getIncomeTaxComparison>>, TError = ErrorType<unknown>>(caseId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getIncomeTaxComparison>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetIncomeTaxComparisonQueryKey(caseId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getIncomeTaxComparison>>> = ({ signal }) => getIncomeTaxComparison(caseId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: caseId !== null && caseId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getIncomeTaxComparison>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetIncomeTaxComparisonQueryResult = NonNullable<Awaited<ReturnType<typeof getIncomeTaxComparison>>>
+export type GetIncomeTaxComparisonQueryError = ErrorType<unknown>
+
+
+export function useGetIncomeTaxComparison<TData = Awaited<ReturnType<typeof getIncomeTaxComparison>>, TError = ErrorType<unknown>>(
+ caseId: number, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getIncomeTaxComparison>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getIncomeTaxComparison>>,
+          TError,
+          Awaited<ReturnType<typeof getIncomeTaxComparison>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetIncomeTaxComparison<TData = Awaited<ReturnType<typeof getIncomeTaxComparison>>, TError = ErrorType<unknown>>(
+ caseId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getIncomeTaxComparison>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getIncomeTaxComparison>>,
+          TError,
+          Awaited<ReturnType<typeof getIncomeTaxComparison>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetIncomeTaxComparison<TData = Awaited<ReturnType<typeof getIncomeTaxComparison>>, TError = ErrorType<unknown>>(
+ caseId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getIncomeTaxComparison>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Year-wise bank credits vs declared income, and AIS / 26AS vs ITR, head by head
+ */
+
+export function useGetIncomeTaxComparison<TData = Awaited<ReturnType<typeof getIncomeTaxComparison>>, TError = ErrorType<unknown>>(
+ caseId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getIncomeTaxComparison>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetIncomeTaxComparisonQueryOptions(caseId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListAssetsUrl = (caseId: number,) => {
 

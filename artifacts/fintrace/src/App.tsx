@@ -23,6 +23,7 @@ import IncomeExpenditure from "@/pages/income-expenditure";
 import Assets from "@/pages/assets";
 import Family from "@/pages/family";
 import Lokayukta from "@/pages/lokayukta";
+import IncomeTax from "@/pages/income-tax";
 import Queries from "@/pages/queries";
 import QueryDetail from "@/pages/query-detail";
 import Documents from "@/pages/documents";
@@ -199,7 +200,7 @@ const P = {
   onboarding: protect(Onboarding, { onboarding: true }),
   dashboard: protect(Dashboard), cases: protect(Cases), caseOverview: protect(CaseOverview), accounts: protect(Accounts),
   transactions: protect(Transactions), reconciliation: protect(Reconciliation), ie: protect(IncomeExpenditure), assets: protect(Assets),
-  family: protect(Family), lokayukta: protect(Lokayukta), queries: protect(Queries), queryDetail: protect(QueryDetail), documents: protect(Documents),
+  family: protect(Family), lokayukta: protect(Lokayukta), incomeTax: protect(IncomeTax), queries: protect(Queries), queryDetail: protect(QueryDetail), documents: protect(Documents),
   assistant: protect(Assistant), caseLegal: protect(CaseLegal), reports: protect(Reports), legal: protect(Legal), audit: protect(Audit), settings: protect(SettingsPage),
 };
 
@@ -238,6 +239,7 @@ function ClerkProviderWithRoutes() {
             <Route path="/cases/:caseId/assets" component={P.assets} />
             <Route path="/cases/:caseId/family" component={P.family} />
             <Route path="/cases/:caseId/lokayukta" component={P.lokayukta} />
+            <Route path="/cases/:caseId/income-tax" component={P.incomeTax} />
             <Route path="/cases/:caseId/queries" component={P.queries} />
             <Route path="/cases/:caseId/queries/:queryId" component={P.queryDetail} />
             <Route path="/cases/:caseId/documents" component={P.documents} />

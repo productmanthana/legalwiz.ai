@@ -1319,6 +1319,141 @@ export const ReviewBlindSpotResponse = zod.object({
 })
 
 
+export const ListTaxDeclarationsParams = zod.object({
+  "caseId": zod.coerce.number().int()
+})
+
+export const ListTaxDeclarationsResponseItem = zod.object({
+  "id": zod.int(),
+  "caseId": zod.int(),
+  "financialYear": zod.string().describe('e.g. 2019-20'),
+  "assessmentYear": zod.string().describe('e.g. 2020-21 (derived)'),
+  "source": zod.enum(['itr', 'ais', 'tis', 'form_26as', 'form_16']),
+  "head": zod.enum(['salary', 'house_property', 'business_profession', 'capital_gains', 'other_sources', 'exempt_income']),
+  "amount": zod.number(),
+  "description": zod.string().nullish(),
+  "documentId": zod.int().nullish(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.iso.datetime({"offset":true})
+})
+export const ListTaxDeclarationsResponse = zod.array(ListTaxDeclarationsResponseItem)
+
+
+export const CreateTaxDeclarationParams = zod.object({
+  "caseId": zod.coerce.number().int()
+})
+
+export const createTaxDeclarationBodyFinancialYearRegExp = new RegExp('^\\d{4}-\\d{2}$');
+export const createTaxDeclarationBodyAmountMin = 0;
+
+
+
+export const CreateTaxDeclarationBody = zod.object({
+  "financialYear": zod.string().regex(createTaxDeclarationBodyFinancialYearRegExp),
+  "source": zod.enum(['itr', 'ais', 'tis', 'form_26as', 'form_16']),
+  "head": zod.enum(['salary', 'house_property', 'business_profession', 'capital_gains', 'other_sources', 'exempt_income']),
+  "amount": zod.number().min(createTaxDeclarationBodyAmountMin),
+  "description": zod.string().nullish(),
+  "documentId": zod.int().nullish(),
+  "notes": zod.string().nullish()
+})
+
+export const CreateTaxDeclarationResponse = zod.object({
+  "id": zod.int(),
+  "caseId": zod.int(),
+  "financialYear": zod.string().describe('e.g. 2019-20'),
+  "assessmentYear": zod.string().describe('e.g. 2020-21 (derived)'),
+  "source": zod.enum(['itr', 'ais', 'tis', 'form_26as', 'form_16']),
+  "head": zod.enum(['salary', 'house_property', 'business_profession', 'capital_gains', 'other_sources', 'exempt_income']),
+  "amount": zod.number(),
+  "description": zod.string().nullish(),
+  "documentId": zod.int().nullish(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.iso.datetime({"offset":true})
+})
+
+
+export const UpdateTaxDeclarationParams = zod.object({
+  "declarationId": zod.coerce.number().int()
+})
+
+export const updateTaxDeclarationBodyFinancialYearRegExp = new RegExp('^\\d{4}-\\d{2}$');
+export const updateTaxDeclarationBodyAmountMin = 0;
+
+
+
+export const UpdateTaxDeclarationBody = zod.object({
+  "financialYear": zod.string().regex(updateTaxDeclarationBodyFinancialYearRegExp),
+  "source": zod.enum(['itr', 'ais', 'tis', 'form_26as', 'form_16']),
+  "head": zod.enum(['salary', 'house_property', 'business_profession', 'capital_gains', 'other_sources', 'exempt_income']),
+  "amount": zod.number().min(updateTaxDeclarationBodyAmountMin),
+  "description": zod.string().nullish(),
+  "documentId": zod.int().nullish(),
+  "notes": zod.string().nullish()
+})
+
+export const UpdateTaxDeclarationResponse = zod.object({
+  "id": zod.int(),
+  "caseId": zod.int(),
+  "financialYear": zod.string().describe('e.g. 2019-20'),
+  "assessmentYear": zod.string().describe('e.g. 2020-21 (derived)'),
+  "source": zod.enum(['itr', 'ais', 'tis', 'form_26as', 'form_16']),
+  "head": zod.enum(['salary', 'house_property', 'business_profession', 'capital_gains', 'other_sources', 'exempt_income']),
+  "amount": zod.number(),
+  "description": zod.string().nullish(),
+  "documentId": zod.int().nullish(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.iso.datetime({"offset":true})
+})
+
+
+export const DeleteTaxDeclarationParams = zod.object({
+  "declarationId": zod.coerce.number().int()
+})
+
+export const DeleteTaxDeclarationResponse = zod.void()
+
+
+/**
+ * @summary Year-wise bank credits vs declared income, and AIS / 26AS vs ITR, head by head
+ */
+export const GetIncomeTaxComparisonParams = zod.object({
+  "caseId": zod.coerce.number().int()
+})
+
+export const GetIncomeTaxComparisonResponse = zod.object({
+  "years": zod.array(zod.object({
+  "financialYear": zod.string(),
+  "assessmentYear": zod.string(),
+  "heads": zod.array(zod.object({
+  "head": zod.string(),
+  "bankCredits": zod.number().describe('Approved bank credits mapped to this head'),
+  "reported": zod.object({
+  "itr": zod.number().nullable(),
+  "ais": zod.number().nullable(),
+  "tis": zod.number().nullable(),
+  "form_26as": zod.number().nullable(),
+  "form_16": zod.number().nullable()
+}),
+  "bankVsItr": zod.number().nullable().describe('bankCredits - ITR (null when no ITR figure)'),
+  "aisVsItr": zod.number().nullable().describe('AIS - ITR (null unless both are recorded)'),
+  "status": zod.enum(['consistent', 'difference', 'itr_missing', 'no_data']),
+  "transactionIds": zod.array(zod.int())
+})),
+  "totalCredits": zod.number().describe('All credits excluding approved own-account transfers / duplicates'),
+  "incomeCredits": zod.number(),
+  "receiptCredits": zod.number().describe('Loans'),
+  "unclassifiedCredits": zod.number(),
+  "excludedTransfers": zod.number(),
+  "declaredIncome": zod.number().nullable().describe('Sum of ITR heads (null when no ITR recorded)'),
+  "observations": zod.array(zod.string())
+})),
+  "threshold": zod.number().describe('Differences at or below this amount are shown as consistent'),
+  "notes": zod.array(zod.string()),
+  "disclaimer": zod.string()
+})
+
+
 export const ListAssetsParams = zod.object({
   "caseId": zod.coerce.number().int()
 })

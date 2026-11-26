@@ -34,6 +34,7 @@ export function CaseLayout({ children }: { children: (c: Case) => ReactNode }) {
     { href: `${base}/assets`, label: "Assets & Liabilities" },
     { href: `${base}/family`, label: "Family" },
     { href: `${base}/lokayukta`, label: inv ? "DA & Blind Spots" : "Lokayukta DA" },
+    { href: `${base}/income-tax`, label: "Income Tax" },
     { href: `${base}/queries`, label: inv ? "Query Management" : "Queries" },
     { href: `${base}/documents`, label: "Documents" },
     { href: `${base}/assistant`, label: "Assistant" },
