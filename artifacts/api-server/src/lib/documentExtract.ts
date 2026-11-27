@@ -183,6 +183,7 @@ async function pdfPages(pdf: Buffer, warnings: string[]): Promise<ExtractedPage[
     if (needsVision.length > queue.length) warnings.push(`Vision reading was limited to ${MAX_VISION_PAGES} pages; ${needsVision.length - queue.length} page(s) used only their text layer.`);
 
     let failed = 0;
+    let firstError = "";
     let next = 0;
     const worker = async () => {
       while (next < queue.length) {
@@ -200,13 +201,23 @@ async function pdfPages(pdf: Buffer, warnings: string[]): Promise<ExtractedPage[
             page.text = `${page.text}\n\n[Visual content on this page]\n${out}`;
             page.method = "mixed";
           }
-        } catch {
+        } catch (err) {
           failed++;
+          firstError ||= visionErrorReason(err);
         }
       }
     };
     await Promise.all(Array.from({ length: VISION_CONCURRENCY }, worker));
-    if (failed) warnings.push(`Vision reading failed on ${failed} page(s); their text layer (if any) was indexed.`);
+    if (failed) warnings.push(`Vision reading failed on ${failed} page(s) (${firstError}); their text layer (if any) was indexed.`);
     return pages;
   });
+}
+
+/** Short, user-facing reason for a vision API failure (never includes the key itself). */
+function visionErrorReason(err: unknown): string {
+  const status = (err as { status?: number })?.status;
+  if (status === 401) return "the OpenAI API key was rejected — update OPENAI_API_KEY";
+  if (status === 429) return "OpenAI rate limit or quota exceeded";
+  if (status === 404) return "the vision model is not available for this API key";
+  return err instanceof Error ? err.message.slice(0, 160) : "unknown error";
 }
