@@ -10,6 +10,22 @@ function inline(text: string): ReactNode[] {
   });
 }
 
+const tableCells = (l: string) => l.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
+
+function MdTable({ lines }: { lines: string[] }) {
+  const rows = lines.filter((l) => !/^\s*\|?\s*:?-{2,}/.test(l)).map(tableCells);
+  const [head, ...body] = rows;
+  const isNum = (c: string) => /^(Rs\.?\s*|₹\s*)?-?[\d,]+(\.\d+)?$/.test(c.replace(/\*\*/g, ""));
+  return (
+    <div className="overflow-x-auto rounded-md border bg-card">
+      <table className="w-full text-xs">
+        <thead className="bg-muted/60"><tr>{head?.map((c, i) => <th key={i} className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">{inline(c)}</th>)}</tr></thead>
+        <tbody>{body.map((r, ri) => <tr key={ri} className="border-t">{r.map((c, ci) => <td key={ci} className={isNum(c) ? "px-2 py-1 text-right num whitespace-nowrap" : "px-2 py-1"}>{inline(c)}</td>)}</tr>)}</tbody>
+      </table>
+    </div>
+  );
+}
+
 export function Markdown({ content }: { content: string }) {
   const lines = content.split("\n");
   const out: ReactNode[] = [];
@@ -20,8 +36,16 @@ export function Markdown({ content }: { content: string }) {
     out.push(<Tag key={out.length} className={list.ordered ? "list-decimal pl-5 space-y-1" : "list-disc pl-5 space-y-1"}>{list.items.map((t, i) => <li key={i}>{inline(t)}</li>)}</Tag>);
     list = null;
   };
-  for (const raw of lines) {
-    const line = raw.trimEnd();
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!.trimEnd();
+    if (/^\s*\|/.test(line)) {
+      flush();
+      const block: string[] = [];
+      while (i < lines.length && /^\s*\|/.test(lines[i]!)) block.push(lines[i++]!);
+      i--;
+      out.push(<MdTable key={out.length} lines={block} />);
+      continue;
+    }
     const ul = line.match(/^\s*[-*]\s+(.*)/);
     const ol = line.match(/^\s*\d+[.)]\s+(.*)/);
     if (ul || ol) {

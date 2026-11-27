@@ -103,6 +103,14 @@ export async function replaceDocumentChunks(caseId: number, documentId: number, 
   }
 }
 
+/** Every stored passage of one case, ordered by document, page and chunk. */
+export async function listCaseChunks(caseId: number): Promise<ChunkInput[]> {
+  const col = await caseCollection(caseId);
+  const all: ChunkInput[] = [];
+  for await (const o of col.iterator()) all.push(o.properties as unknown as ChunkInput);
+  return all.sort((a, b) => a.documentId - b.documentId || a.pageNumber - b.pageNumber || a.chunkIndex - b.chunkIndex);
+}
+
 /** Hybrid (keyword + semantic) search scoped to one case's tenant. */
 export async function searchCaseChunks(caseId: number, query: string, limit = 8): Promise<ChunkHit[]> {
   const col = await caseCollection(caseId);

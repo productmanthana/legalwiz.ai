@@ -17,7 +17,10 @@ import { intParam, loadCase } from "../lib/access";
 import { audit } from "../lib/audit";
 import { aiConfigured, completeJson, GUARDRAILS } from "../lib/ai";
 import { blindSpots, daCalculation } from "../lib/schedules";
-import { searchCaseChunks, weaviateConfigured } from "../lib/weaviate";
+import { weaviateConfigured } from "../lib/weaviate";
+import { documentPassages } from "../lib/assistantContext";
+import { answerReport } from "../lib/assistantExport";
+import { renderDocx, renderPdf, renderXlsx } from "../lib/reports";
 
 const router: IRouter = Router();
 
@@ -72,14 +75,13 @@ router.post("/cases/:caseId/assistant/messages", async (req, res): Promise<void>
   const [da, spots] = await Promise.all([daCalculation(ctx.c, false), blindSpots(caseId)]);
   // Relevant passages from this case's indexed documents (Weaviate tenant = this case only).
   const liveDocIds = new Set(docs.map((d) => d.id));
-  const passages = weaviateConfigured()
-    ? await searchCaseChunks(caseId, parsed.data.message, 8)
-        .then((hits) => hits.filter((h) => liveDocIds.has(h.documentId)))
-        .catch((err) => {
-          req.log.error({ err }, "Document search failed");
-          return [];
-        })
-    : [];
+  const docText = weaviateConfigured()
+    ? await documentPassages(caseId, parsed.data.message, liveDocIds).catch((err) => {
+        req.log.error({ err }, "Document search failed");
+        return { complete: false, pages: [] };
+      })
+    : { complete: false, pages: [] };
+  const passages = docText.pages;
   const history = await db
     .select()
     .from(assistantMessagesTable)
@@ -97,6 +99,7 @@ router.post("/cases/:caseId/assistant/messages", async (req, res): Promise<void>
     family: family.map((f) => ({ name: f.name, relationship: f.relationship, independentIncome: f.hasIndependentIncome, occupation: f.occupation })),
     ledgerEntries: entries.map((e) => ({ id: e.id, type: e.entryType, category: e.category, amount: e.amount, date: e.entryDate, status: e.verificationStatus })),
     documents: docs.map((d) => ({ id: d.id, name: d.name, category: d.category, fy: d.financialYear })),
+    documentTextIsComplete: docText.complete,
     documentPassages: passages.map((p) => ({ documentId: p.documentId, document: p.documentName, page: p.pageNumber, readBy: p.method === "text" ? "text extraction" : "vision model", text: p.content })),
     daWorking: { components: da.components.map((c) => ({ code: c.code, amount: c.amount })), disproportion: da.disproportion, percent: da.disproportionPercent, missing: da.missingInformation },
     blindSpots: spots.map((s) => ({ title: s.title, severity: s.severity, status: s.reviewStatus })),
@@ -108,7 +111,10 @@ router.post("/cases/:caseId/assistant/messages", async (req, res): Promise<void>
     const out = await completeJson<{ answer?: string; citations?: { kind?: string; id?: number; page?: number }[] }>(
       `${GUARDRAILS}
 You answer questions about one case using the JSON case data supplied. Format the answer as concise Markdown. Prefix each key point with a bold label: **Verified fact**, **User-provided**, **AI suggestion**, or **Missing information**.
-documentPassages are excerpts retrieved from the case's uploaded documents; quote them with the document name and page (e.g. "Sale deed, p. 4"). Passages "read by vision model" were transcribed from scanned pages or images and must be checked against the original.
+documentPassages hold text of the case's uploaded documents, one entry per page. When documentTextIsComplete is true they are the COMPLETE text of every page of every document: answer from all of them, and for totals or lists go through every page and every matching entry. When it is false they are only the best-matching excerpts: say so under **Missing information**.
+When the question asks for data, totals, lists or schedules, present the itemised entries as a Markdown table (with date, document, page, description and amount columns where available) followed by the total row.
+Always end with a **Missing information** section listing what is missing, illegible or uncertain (unreadable pages, gaps in periods, conflicting figures) and what the user should provide; write "None identified" if nothing is missing.
+Quote them with the document name and page (e.g. "Sale deed, p. 4"). Passages "read by vision model" were transcribed from scanned pages or images and must be checked against the original.
 Return JSON: {"answer": string, "citations": [{"kind": "transaction"|"document"|"asset"|"legal_reference"|"ledger_entry", "id": number, "page"?: number}]} citing the records you relied on by id (for a document passage use its documentId and page).`,
       `CASE DATA:\n${JSON.stringify(context)}\n\nCONVERSATION:\n${convo}`,
     );
@@ -139,6 +145,40 @@ Return JSON: {"answer": string, "citations": [{"kind": "transaction"|"document"|
     req.log.error({ err }, "AI assistant failed");
     res.json(await save("The AI assistant did not respond. No answer was generated; please try again later.", [], false));
   }
+});
+
+const EXPORT_MIME: Record<string, string> = {
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  pdf: "application/pdf",
+};
+
+/** Downloads one assistant answer as Excel, Word or PDF. */
+router.get("/cases/:caseId/assistant/messages/:messageId/export", async (req, res): Promise<void> => {
+  const ctx = await loadCase(req, res, intParam(req, "caseId"));
+  if (!ctx) return;
+  const format = String(req.query.format ?? "");
+  if (!EXPORT_MIME[format]) {
+    res.status(400).json({ error: "format must be xlsx, docx or pdf" });
+    return;
+  }
+  const rows = await db
+    .select()
+    .from(assistantMessagesTable)
+    .where(and(eq(assistantMessagesTable.caseId, ctx.c.id), eq(assistantMessagesTable.userId, ctx.user.id)))
+    .orderBy(asc(assistantMessagesTable.id));
+  const idx = rows.findIndex((m) => m.id === intParam(req, "messageId") && m.role === "assistant");
+  if (idx < 0) {
+    res.status(404).json({ error: "Answer not found" });
+    return;
+  }
+  const question = rows.slice(0, idx).reverse().find((m) => m.role === "user")?.content ?? "";
+  const model = answerReport(ctx.c.title, question, rows[idx]!, ctx.user.displayName);
+  const buf = format === "xlsx" ? await renderXlsx(model) : format === "pdf" ? await renderPdf(model) : await renderDocx(model);
+  await audit(req, { caseId: ctx.c.id, caseTitle: ctx.c.title, action: "assistant.exported", entityType: "assistant_message", entityId: rows[idx]!.id, summary: `Exported an AI assistant answer as ${format.toUpperCase()}` });
+  res.setHeader("Content-Type", EXPORT_MIME[format]!);
+  res.setHeader("Content-Disposition", `attachment; filename="${`${ctx.c.title}-assistant-${rows[idx]!.id}`.replace(/[^A-Za-z0-9-_]+/g, "_").slice(0, 80)}.${format}"`);
+  res.send(buf);
 });
 
 export default router;
