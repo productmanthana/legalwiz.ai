@@ -25,7 +25,7 @@ import IncomeTax from "@/pages/income-tax";
 import Queries from "@/pages/queries";
 import QueryDetail from "@/pages/query-detail";
 import Documents from "@/pages/documents";
-import Assistant from "@/pages/assistant";
+import Assistant, { CaseAssistantRedirect } from "@/pages/assistant";
 import CaseLegal from "@/pages/case-legal";
 import Reports from "@/pages/reports";
 import Legal from "@/pages/legal";
@@ -105,9 +105,11 @@ function AppRoutes() {
             <Route path="/cases/:caseId/queries" component={P.queries} />
             <Route path="/cases/:caseId/queries/:queryId" component={P.queryDetail} />
             <Route path="/cases/:caseId/documents" component={P.documents} />
-            <Route path="/cases/:caseId/assistant" component={P.assistant} />
+            <Route path="/cases/:caseId/assistant" component={CaseAssistantRedirect} />
             <Route path="/cases/:caseId/legal" component={P.caseLegal} />
             <Route path="/cases/:caseId/reports" component={P.reports} />
+            <Route path="/assistant" component={P.assistant} />
+            <Route path="/assistant/:caseId" component={P.assistant} />
             <Route path="/legal" component={P.legal} />
             <Route path="/audit" component={P.audit} />
             <Route path="/settings" component={P.settings} />

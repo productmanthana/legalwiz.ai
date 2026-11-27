@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "wouter";
+import { Link, Redirect, useLocation, useParams } from "wouter";
 import { Send, Loader2, Bot, CloudOff } from "lucide-react";
-import { useListAssistantMessages, useAskAssistant, getListAssistantMessagesQueryKey, type Case, type AssistantMessageCitationsItem } from "@workspace/api-client-react";
+import { useListAssistantMessages, useAskAssistant, useListCases, useGetCase, getGetCaseQueryKey, getListAssistantMessagesQueryKey, type Case, type AssistantMessageCitationsItem } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { CaseLayout, useCaseId } from "@/components/case-layout";
-import { LoadingRows, ErrorState, Tag, AiBadge, useInvalidate, Notice } from "@/components/common";
+import { LoadingRows, ErrorState, EmptyState, Tag, AiBadge, useInvalidate, Notice, PageHeader, nativeSelect } from "@/components/common";
 import { Markdown } from "@/components/markdown";
 import { fdatetime, human, errMsg } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
@@ -19,7 +18,7 @@ function citeHref(caseId: number, c: AssistantMessageCitationsItem) {
 }
 
 function Body({ c }: { c: Case }) {
-  const caseId = useCaseId();
+  const caseId = c.id;
   const q = useListAssistantMessages(caseId);
   const ask = useAskAssistant();
   const inv = useInvalidate(); const { toast } = useToast();
@@ -37,7 +36,7 @@ function Body({ c }: { c: Case }) {
 
   return (
     <div className="grid lg:grid-cols-[1fr_280px] gap-5">
-      <div className="rounded-lg border bg-card shadow-xs flex flex-col h-[calc(100dvh-280px)] min-h-[460px]">
+      <div className="rounded-lg border bg-card shadow-xs flex flex-col h-[calc(100dvh-220px)] min-h-[460px]">
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {q.isLoading ? <LoadingRows /> : q.isError ? <ErrorState error={q.error} onRetry={() => q.refetch()} /> : !q.data?.length && !pending ? (
             <div className="h-full grid place-items-center text-center">
@@ -78,6 +77,36 @@ function Body({ c }: { c: Case }) {
   );
 }
 
+/** Old case-tab URL — the assistant now has its own page. */
+export function CaseAssistantRedirect() {
+  const { caseId } = useParams<{ caseId: string }>();
+  return <Redirect to={`/assistant/${caseId}`} replace />;
+}
+
+function CaseChat({ caseId }: { caseId: number }) {
+  const q = useGetCase(caseId, { query: { queryKey: getGetCaseQueryKey(caseId) } });
+  if (q.isLoading) return <LoadingRows />;
+  if (q.isError || !q.data) return <ErrorState error={q.error} onRetry={() => q.refetch()} />;
+  return <Body key={caseId} c={q.data} />;
+}
+
 export default function Assistant() {
-  return <CaseLayout>{(c) => <Body c={c} />}</CaseLayout>;
+  const params = useParams<{ caseId?: string }>();
+  const [, nav] = useLocation();
+  const cases = useListCases();
+  const caseId = Number(params.caseId) || cases.data?.[0]?.id;
+
+  return (
+    <div>
+      <PageHeader eyebrow="AI" title="AI Assistant" description="Ask questions in plain language about a case's documents, transactions and records."
+        actions={!!cases.data?.length && (
+          <select className={cn(nativeSelect, "min-w-64")} value={caseId ?? ""} onChange={(e) => nav(`/assistant/${e.target.value}`)} data-testid="select-assistant-case">
+            {cases.data.map((x) => <option key={x.id} value={x.id}>{x.title}{x.subjectName ? ` — ${x.subjectName}` : ""}</option>)}
+          </select>
+        )} />
+      {cases.isLoading ? <LoadingRows /> : cases.isError ? <ErrorState error={cases.error} onRetry={() => cases.refetch()} />
+        : !caseId ? <EmptyState icon={<Bot className="h-6 w-6" />} title="No cases yet" body={<>Create a case and upload documents, then ask questions here. <Link href="/cases" className="underline">Go to cases</Link></>} />
+        : <CaseChat caseId={caseId} />}
+    </div>
+  );
 }

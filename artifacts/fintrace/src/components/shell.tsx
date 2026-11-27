@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { LayoutDashboard, FolderOpen, Scale, History, Settings, LogOut, Menu, X, MessagesSquare, FileSearch } from "lucide-react";
+import { LayoutDashboard, FolderOpen, Scale, History, Settings, LogOut, Menu, X, MessagesSquare, FileSearch, Bot } from "lucide-react";
 import { useGetMe, useSignOut } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
 import { human, initials } from "@/lib/format";
@@ -32,6 +32,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/cases", label: inv ? "Assigned Investigations" : "My Cases", icon: FolderOpen },
     ...(inv ? [{ href: "/cases?focus=queries", label: "Query Management", icon: MessagesSquare }, { href: "/cases?focus=responses", label: "Response Review", icon: FileSearch }] : []),
+    { href: "/assistant", label: "AI Assistant", icon: Bot },
     { href: "/legal", label: inv ? "Legal References" : "Legal Intelligence", icon: Scale },
     { href: "/audit", label: inv ? "Review History" : "Audit History", icon: History },
     { href: "/settings", label: "Settings", icon: Settings },
