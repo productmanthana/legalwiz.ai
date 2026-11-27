@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
-import { getAuth, clerkClient } from "@clerk/express";
 import { and, eq } from "drizzle-orm";
-import { db, usersTable, casesTable, caseSharesTable, type User, type CaseRow } from "@workspace/db";
+import { db, casesTable, caseSharesTable, type User, type CaseRow } from "@workspace/db";
+import { sessionUser } from "./auth";
 
 export type AccessRole = "owner" | "editor" | "reviewer" | "investigator";
 
@@ -19,27 +19,12 @@ export function currentUser(req: Request): User {
   return req.appUser;
 }
 
-/** Resolves the Clerk session to an app user, creating the profile on first sight. */
+/** Resolves the session cookie to an app user; 401 when signed out. */
 export async function requireUser(req: Request, res: Response, next: NextFunction): Promise<void> {
-  const auth = getAuth(req);
-  const clerkUserId = (auth?.sessionClaims?.userId as string | undefined) || auth?.userId;
-  if (!clerkUserId) {
+  const user = await sessionUser(req);
+  if (!user) {
     res.status(401).json({ error: "Unauthorized" });
     return;
-  }
-  let [user] = await db.select().from(usersTable).where(eq(usersTable.clerkUserId, clerkUserId));
-  if (!user) {
-    const cu = await clerkClient.users.getUser(clerkUserId);
-    const email = (cu.primaryEmailAddress?.emailAddress ?? cu.emailAddresses[0]?.emailAddress ?? "").toLowerCase();
-    const displayName = [cu.firstName, cu.lastName].filter(Boolean).join(" ") || cu.username || email.split("@")[0] || "User";
-    [user] = await db
-      .insert(usersTable)
-      .values({ clerkUserId, email, displayName })
-      .onConflictDoNothing()
-      .returning();
-    if (!user) {
-      [user] = await db.select().from(usersTable).where(eq(usersTable.clerkUserId, clerkUserId));
-    }
   }
   req.appUser = user;
   next();

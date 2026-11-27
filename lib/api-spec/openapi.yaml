@@ -9,6 +9,7 @@ servers:
     description: Base API path
 tags:
   - name: health
+  - name: auth
   - name: me
   - name: dashboard
   - name: cases
@@ -39,6 +40,44 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /auth/sign-up:
+    post:
+      operationId: signUp
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SignUpBody" }
+      responses:
+        "201":
+          description: Account created and signed in
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserProfile" }
+  /auth/sign-in:
+    post:
+      operationId: signIn
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SignInBody" }
+      responses:
+        "200":
+          description: Signed in
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserProfile" }
+  /auth/sign-out:
+    post:
+      operationId: signOut
+      tags: [auth]
+      responses:
+        "204":
+          description: Signed out
 
   /me:
     get:
@@ -1315,6 +1354,19 @@ components:
           enum: [individual, advocate, chartered_accountant, investigation_officer, admin]
         organisation: { type: ["string", "null"] }
         onboarded: { type: boolean }
+    SignUpBody:
+      type: object
+      required: [email, password, displayName]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 8, maxLength: 200 }
+        displayName: { type: string, minLength: 1, maxLength: 120 }
+    SignInBody:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string }
+        password: { type: string }
     UserProfileUpdate:
       type: object
       properties:

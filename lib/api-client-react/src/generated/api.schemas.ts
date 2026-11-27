@@ -67,6 +67,25 @@ export interface UserProfile {
   onboarded: boolean;
 }
 
+export interface SignUpBody {
+  email: string;
+  /**
+     * @minLength 8
+     * @maxLength 200
+     */
+  password: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  displayName: string;
+}
+
+export interface SignInBody {
+  email: string;
+  password: string;
+}
+
 export type UserProfileUpdateWorkspace = typeof UserProfileUpdateWorkspace[keyof typeof UserProfileUpdateWorkspace];
 
 

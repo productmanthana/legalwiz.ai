@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import healthRouter from "./health";
+import authRouter from "./auth";
 import meRouter from "./me";
 import dashboardRouter from "./dashboard";
 import casesRouter from "./cases";
@@ -20,6 +21,7 @@ import { requireUser } from "../lib/access";
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use(authRouter);
 // Everything below requires a signed-in user.
 router.use(requireUser);
 router.use(meRouter);

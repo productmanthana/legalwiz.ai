@@ -1,12 +1,10 @@
 import { useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { useClerk } from "@clerk/react";
+import { useQueryClient } from "@tanstack/react-query";
 import { LayoutDashboard, FolderOpen, Scale, History, Settings, LogOut, Menu, X, MessagesSquare, FileSearch } from "lucide-react";
-import { useGetMe } from "@workspace/api-client-react";
+import { useGetMe, useSignOut } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
 import { human, initials } from "@/lib/format";
-
-const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export function Logo({ light }: { light?: boolean }) {
   return (
@@ -24,8 +22,9 @@ export function Logo({ light }: { light?: boolean }) {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { data: me } = useGetMe();
-  const { signOut } = useClerk();
-  const [location] = useLocation();
+  const queryClient = useQueryClient();
+  const [location, setLocation] = useLocation();
+  const signOut = useSignOut({ mutation: { onSettled: () => { queryClient.clear(); setLocation("/"); } } });
   const [open, setOpen] = useState(false);
   const inv = me?.workspace === "investigation";
 
@@ -76,7 +75,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="text-[13px] text-white truncate" data-testid="text-username">{me?.displayName ?? "—"}</div>
           <div className="text-[11px] text-sidebar-foreground/55 truncate">{human(me?.role)}</div>
         </div>
-        <button title="Sign out" onClick={() => signOut({ redirectUrl: basePath || "/" })} className="p-2 rounded-md text-sidebar-foreground/70 hover:text-white hover:bg-sidebar-accent" data-testid="button-signout">
+        <button title="Sign out" onClick={() => signOut.mutate()} className="p-2 rounded-md text-sidebar-foreground/70 hover:text-white hover:bg-sidebar-accent" data-testid="button-signout">
           <LogOut className="h-4 w-4" />
         </button>
       </div>

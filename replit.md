@@ -50,6 +50,7 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 - Zod body schemas must not coerce dates (DB uses date strings); orval zod config has `useDates: false` and body coerce only `bigint`.
 - Do not zod-parse responses on the server.
+- Auth is built-in email + password (no Clerk): `lib/auth.ts` hashes with scrypt and keeps sessions in the `sessions` table (only a SHA-256 of the `fintrace_session` HttpOnly cookie token is stored). `/api/auth/*` is mounted before `requireUser`. Existing databases still have `users.clerk_user_id`; drizzle push asks interactively whether `password_hash` is a rename, so drop that column first (or answer "create column").
 - `pdfkit`, `fontkit`, `exceljs`, `weaviate-client` are esbuild externals (pdfkit reads data files at runtime).
 - Document indexing env: `WEAVIATE_URL` (scheme optional), `WEAVIATE_API_KEY`; vision via `AI_INTEGRATIONS_OPENAI_*` or `OPENAI_API_KEY` (`VISION_MODEL` default `gpt-4o`, `MAX_VISION_PAGES_PER_DOCUMENT` default 500). Without Weaviate, documents stay `not_indexed`; without a vision key, scanned/image pages index only their text layer and the document records a warning.
 - System binaries needed on the API host: `poppler-utils` (pdftotext, pdfimages, pdftoppm) and, for Word-with-images/other office formats, LibreOffice (`soffice`).

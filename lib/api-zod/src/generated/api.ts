@@ -16,6 +16,49 @@ export const HealthCheckResponse = zod.object({
 })
 
 
+export const signUpBodyPasswordMin = 8;
+export const signUpBodyPasswordMax = 200;
+
+export const signUpBodyDisplayNameMax = 120;
+
+
+
+export const SignUpBody = zod.object({
+  "email": zod.email(),
+  "password": zod.string().min(signUpBodyPasswordMin).max(signUpBodyPasswordMax),
+  "displayName": zod.string().min(1).max(signUpBodyDisplayNameMax)
+})
+
+export const SignUpResponse = zod.object({
+  "id": zod.int(),
+  "email": zod.string(),
+  "displayName": zod.string(),
+  "workspace": zod.enum(['client', 'investigation']).describe('client = accused/advocate/CA workspace; investigation = authorised officer workspace'),
+  "role": zod.enum(['individual', 'advocate', 'chartered_accountant', 'investigation_officer', 'admin']),
+  "organisation": zod.string().nullish(),
+  "onboarded": zod.boolean()
+})
+
+
+export const SignInBody = zod.object({
+  "email": zod.string(),
+  "password": zod.string()
+})
+
+export const SignInResponse = zod.object({
+  "id": zod.int(),
+  "email": zod.string(),
+  "displayName": zod.string(),
+  "workspace": zod.enum(['client', 'investigation']).describe('client = accused/advocate/CA workspace; investigation = authorised officer workspace'),
+  "role": zod.enum(['individual', 'advocate', 'chartered_accountant', 'investigation_officer', 'admin']),
+  "organisation": zod.string().nullish(),
+  "onboarded": zod.boolean()
+})
+
+
+export const SignOutResponse = zod.void()
+
+
 export const GetMeResponse = zod.object({
   "id": zod.int(),
   "email": zod.string(),

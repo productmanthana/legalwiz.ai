@@ -9,7 +9,7 @@ import { seedDemoCase } from "../lib/demo";
 
 const router: IRouter = Router();
 
-function serializeUser(u: typeof usersTable.$inferSelect) {
+export function serializeUser(u: typeof usersTable.$inferSelect) {
   return {
     id: u.id,
     email: u.email,
