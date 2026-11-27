@@ -54,6 +54,7 @@ _Populate as you build — explicit user instructions worth remembering across s
 - `pdfkit`, `fontkit`, `exceljs`, `weaviate-client` are esbuild externals (pdfkit reads data files at runtime).
 - Document indexing env: `WEAVIATE_URL` (scheme optional), `WEAVIATE_API_KEY`; vision via `AI_INTEGRATIONS_OPENAI_*` or `OPENAI_API_KEY` (`VISION_MODEL` default `gpt-4o`, `MAX_VISION_PAGES_PER_DOCUMENT` default 500). Without Weaviate, documents stay `not_indexed`; without a vision key, scanned/image pages index only their text layer and the document records a warning.
 - System binaries needed on the API host: `poppler-utils` (pdftotext, pdfimages, pdftoppm) and, for Word-with-images/other office formats, LibreOffice (`soffice`).
+- File storage: Replit App Storage by default. Outside Replit (Docker/sandbox) set `LOCAL_OBJECT_DIR` (e.g. a mounted volume); uploads then PUT to `/api/storage/local-uploads/:uuid` (signed-in, 50 MB cap) and are stored on disk (`lib/localObjectStorage.ts`). Unset = original Replit behaviour.
 - New `documents.index_*` columns need `pnpm --filter @workspace/db run push`.
 
 ## Pointers

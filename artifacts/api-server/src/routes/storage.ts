@@ -2,8 +2,9 @@ import { Readable } from "stream";
 import { eq } from "drizzle-orm";
 import { db, documentsTable } from "@workspace/db";
 import { RequestUploadUrlBody } from "@workspace/api-zod";
-import { Router, type IRouter, type Request, type Response } from "express";
+import express, { Router, type IRouter, type Request, type Response } from "express";
 import { ObjectNotFoundError, ObjectStorageService } from "../lib/objectStorage";
+import { localObjectDir, saveLocalObject } from "../lib/localObjectStorage";
 import { loadCase } from "../lib/access";
 
 const router: IRouter = Router();
@@ -32,6 +33,30 @@ router.post("/storage/uploads/request-url", async (req: Request, res: Response) 
     res.status(500).json({ error: "Failed to generate upload URL" });
   }
 });
+
+/** Receives the file body for a URL minted above when disk storage (LOCAL_OBJECT_DIR) is enabled. */
+router.put(
+  "/storage/local-uploads/:id",
+  express.raw({ type: () => true, limit: MAX_UPLOAD_BYTES }),
+  async (req: Request, res: Response) => {
+    if (!localObjectDir()) {
+      res.status(404).json({ error: "Local storage is not enabled" });
+      return;
+    }
+    const id = String(req.params.id);
+    if (!/^[0-9a-f-]{36}$/.test(id) || !Buffer.isBuffer(req.body)) {
+      res.status(400).json({ error: "Invalid upload" });
+      return;
+    }
+    try {
+      await saveLocalObject(id, req.body, req.get("content-type") || "application/octet-stream");
+      res.status(200).end();
+    } catch (error) {
+      req.log.error({ err: error }, "Error saving local upload");
+      res.status(500).json({ error: "Failed to save upload" });
+    }
+  },
+);
 
 /** Serves a private object only if it is a registered document in a case the user can read. */
 router.get("/storage/objects/*path", async (req: Request, res: Response) => {

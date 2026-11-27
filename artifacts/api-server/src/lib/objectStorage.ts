@@ -9,6 +9,10 @@ import {
   ObjectPermission,
   setObjectAclPolicy,
 } from './objectAcl';
+import { LOCAL_UPLOAD_ROUTE, LocalFile, localObjectDir } from './localObjectStorage';
+
+/** A stored object: a GCS file, or a disk file when LOCAL_OBJECT_DIR is set. */
+export type StoredFile = File | LocalFile;
 
 const REPLIT_SIDECAR_ENDPOINT = 'http://127.0.0.1:1106';
 
@@ -89,11 +93,11 @@ export class ObjectStorageService {
   }
 
   async downloadObject(
-    file: File,
+    file: StoredFile,
     cacheTtlSec: number = 3600,
   ): Promise<Response> {
     const [metadata] = await file.getMetadata();
-    const aclPolicy = await getObjectAclPolicy(file);
+    const aclPolicy = file instanceof LocalFile ? null : await getObjectAclPolicy(file);
     const isPublic = aclPolicy?.visibility === 'public';
 
     const nodeStream = file.createReadStream();
@@ -112,6 +116,10 @@ export class ObjectStorageService {
   }
 
   async getObjectEntityUploadURL(): Promise<string> {
+    if (localObjectDir()) {
+      // Same-origin PUT handled by the storage router (see routes/storage.ts).
+      return `${LOCAL_UPLOAD_ROUTE}${randomUUID()}`;
+    }
     const privateObjectDir = this.getPrivateObjectDir();
     if (!privateObjectDir) {
       throw new Error(
@@ -133,9 +141,15 @@ export class ObjectStorageService {
     });
   }
 
-  async getObjectEntityFile(objectPath: string): Promise<File> {
+  async getObjectEntityFile(objectPath: string): Promise<StoredFile> {
     if (!objectPath.startsWith('/objects/')) {
       throw new ObjectNotFoundError();
+    }
+    if (localObjectDir()) {
+      const m = /^\/objects\/uploads\/([0-9a-f-]{36})$/.exec(objectPath);
+      const local = m ? new LocalFile(m[1]!) : null;
+      if (!local || !(await local.exists())) throw new ObjectNotFoundError();
+      return local;
     }
 
     const parts = objectPath.slice(1).split('/');
@@ -160,6 +174,9 @@ export class ObjectStorageService {
   }
 
   normalizeObjectEntityPath(rawPath: string): string {
+    if (rawPath.startsWith(LOCAL_UPLOAD_ROUTE)) {
+      return `/objects/uploads/${rawPath.slice(LOCAL_UPLOAD_ROUTE.length)}`;
+    }
     if (!rawPath.startsWith('https://storage.googleapis.com/')) {
       return rawPath;
     }
@@ -190,6 +207,7 @@ export class ObjectStorageService {
     }
 
     const objectFile = await this.getObjectEntityFile(normalizedPath);
+    if (objectFile instanceof LocalFile) return normalizedPath;
     await setObjectAclPolicy(objectFile, aclPolicy);
     return normalizedPath;
   }

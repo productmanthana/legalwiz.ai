@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { FileText, Upload, Loader2, Download, Archive, Pencil, Search, Copy, Layers } from "lucide-react";
+import { FileText, Upload, Loader2, Download, Archive, Pencil, Search, Copy, Layers, X } from "lucide-react";
 import {
   useListDocuments, useCreateDocument, useUpdateDocument, useArchiveDocument, useRequestUploadUrl, getListDocumentsQueryKey, getGetCaseSummaryQueryKey,
   type Case, type Document, type DocumentInputCategory,
@@ -24,43 +24,89 @@ function UploadDialog({ open, onOpenChange, prev }: { open: boolean; onOpenChang
   const caseId = useCaseId();
   const reqUrl = useRequestUploadUrl(); const create = useCreateDocument();
   const inv = useInvalidate(); const { toast } = useToast();
-  const [file, setFile] = useState<File | null>(null);
+  // A new version replaces exactly one document; a fresh upload may take several files at once.
+  const multiple = !prev;
+  const [files, setFiles] = useState<File[]>([]);
   const [cat, setCat] = useState<string>(prev?.category ?? "bank_statement");
   const [fy, setFy] = useState(prev?.financialYear ?? ""); const [desc, setDesc] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<number | null>(null);
   const ref = useRef<HTMLInputElement>(null);
+  const busy = progress !== null;
 
-  const go = async () => {
-    if (!file) return;
-    setBusy(true);
-    try {
-      const hash = await sha256(file);
-      const contentType = file.type || "application/octet-stream";
-      const { uploadURL, objectPath } = await reqUrl.mutateAsync({ data: { name: file.name, size: file.size, contentType } });
-      const put = await fetch(uploadURL, { method: "PUT", body: file, headers: { "Content-Type": contentType } });
-      if (!put.ok) throw new Error(`Upload failed (${put.status})`);
-      const doc = await create.mutateAsync({ caseId, data: { name: file.name, category: cat as DocumentInputCategory, description: desc || null, objectPath, sha256: hash, sizeBytes: file.size, contentType, financialYear: fy || null, previousVersionId: prev?.id ?? null } });
-      inv(getListDocumentsQueryKey(caseId), getGetCaseSummaryQueryKey(caseId));
-      toast({ title: doc.isDuplicate ? "Uploaded — identical file already exists" : `Uploaded version ${doc.version}`, description: doc.isDuplicate ? "The SHA-256 matches an existing document in this case." : undefined });
-      onOpenChange(false); setFile(null); setDesc("");
-    } catch (e) { toast({ title: "Upload failed", description: errMsg(e), variant: "destructive" }); }
-    setBusy(false);
+  const uploadOne = async (file: File) => {
+    const hash = await sha256(file);
+    const contentType = file.type || "application/octet-stream";
+    const { uploadURL, objectPath } = await reqUrl.mutateAsync({ data: { name: file.name, size: file.size, contentType } });
+    const put = await fetch(uploadURL, { method: "PUT", body: file, headers: { "Content-Type": contentType }, credentials: "include" });
+    if (!put.ok) throw new Error(`Upload failed (${put.status})`);
+    return create.mutateAsync({ caseId, data: { name: file.name, category: cat as DocumentInputCategory, description: desc || null, objectPath, sha256: hash, sizeBytes: file.size, contentType, financialYear: fy || null, previousVersionId: prev?.id ?? null } });
   };
 
+  const go = async () => {
+    if (!files.length) return;
+    const failed: File[] = []; let done = 0; let dupes = 0; let lastVersion = 1;
+    for (const [i, file] of files.entries()) {
+      setProgress(i);
+      try {
+        const doc = await uploadOne(file);
+        done++; if (doc.isDuplicate) dupes++; lastVersion = doc.version;
+      } catch (e) {
+        failed.push(file);
+        toast({ title: `Upload failed: ${file.name}`, description: errMsg(e), variant: "destructive" });
+      }
+    }
+    setProgress(null);
+    if (done) {
+      inv(getListDocumentsQueryKey(caseId), getGetCaseSummaryQueryKey(caseId));
+      toast({
+        title: prev ? `Uploaded version ${lastVersion}` : `Uploaded ${done} document${done === 1 ? "" : "s"}`,
+        description: dupes ? `${dupes} file${dupes === 1 ? " matches" : "s match"} an existing document in this case (same SHA-256).` : undefined,
+      });
+    }
+    // Keep only the failed files selected so they can be retried.
+    setFiles(failed);
+    if (!failed.length) { onOpenChange(false); setDesc(""); }
+  };
+
+  const pick = (list: FileList | null) => setFiles(list ? Array.from(list) : []);
+  const total = files.reduce((t, f) => t + f.size, 0);
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(o) => !busy && onOpenChange(o)}>
       <DialogContent className="sm:max-w-xl">
-        <DialogHeader><DialogTitle className="font-display font-medium text-xl">{prev ? `New version of ${prev.name}` : "Upload document"}</DialogTitle><DialogDescription>Each file is fingerprinted with SHA-256 so duplicates and altered copies can be identified.</DialogDescription></DialogHeader>
-        <button type="button" onClick={() => ref.current?.click()} className={cn("w-full rounded-lg border-2 border-dashed p-6 text-center", file ? "border-[hsl(var(--teal))] bg-accent/40" : "hover:bg-muted/60")} data-testid="button-pick-document">
-          <Upload className="h-6 w-6 mx-auto text-[hsl(var(--teal))]" /><div className="text-sm mt-2 font-medium">{file ? file.name : "Choose a file"}</div>{file && <div className="text-xs text-muted-foreground num">{n(file.size)} bytes</div>}
+        <DialogHeader><DialogTitle className="font-display font-medium text-xl">{prev ? `New version of ${prev.name}` : "Upload documents"}</DialogTitle><DialogDescription>Each file is fingerprinted with SHA-256 so duplicates and altered copies can be identified.</DialogDescription></DialogHeader>
+        <button type="button" disabled={busy} onClick={() => ref.current?.click()} className={cn("w-full rounded-lg border-2 border-dashed p-6 text-center", files.length ? "border-[hsl(var(--teal))] bg-accent/40" : "hover:bg-muted/60")} data-testid="button-pick-document">
+          <Upload className="h-6 w-6 mx-auto text-[hsl(var(--teal))]" />
+          <div className="text-sm mt-2 font-medium">{files.length === 0 ? (multiple ? "Choose one or more files" : "Choose a file") : files.length === 1 ? files[0]!.name : `${files.length} files selected`}</div>
+          {files.length > 0 && <div className="text-xs text-muted-foreground num">{n(total)} bytes</div>}
         </button>
-        <input ref={ref} type="file" className="hidden" onChange={(e) => setFile(e.target.files?.[0] ?? null)} data-testid="input-document-file" />
+        <input ref={ref} type="file" multiple={multiple} className="hidden" onChange={(e) => { pick(e.target.files); e.target.value = ""; }} data-testid="input-document-file" />
+        {files.length > 1 && (
+          <ul className="max-h-36 overflow-y-auto rounded-md border divide-y text-sm" data-testid="list-selected-files">
+            {files.map((f, i) => (
+              <li key={`${f.name}-${i}`} className={cn("flex items-center justify-between gap-3 px-3 py-1.5", progress === i && "bg-accent/40")}>
+                <span className="truncate">{f.name}</span>
+                <span className="flex items-center gap-2 shrink-0 text-xs text-muted-foreground num">
+                  {progress === i && <Loader2 className="h-3 w-3 animate-spin" />}{n(f.size)} bytes
+                  {!busy && <button type="button" className="hover:text-foreground" title="Remove" onClick={() => setFiles(files.filter((_, j) => j !== i))}><X className="h-3.5 w-3.5" /></button>}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <Field label="Category"><select className={nativeSelect} value={cat} onChange={(e) => setCat(e.target.value)} data-testid="select-document-category">{DOC_CATEGORIES.map((c) => <option key={c} value={c}>{human(c)}</option>)}</select></Field>
           <Field label="Financial year"><Input value={fy} placeholder="2018-19" onChange={(e) => setFy(e.target.value)} /></Field>
           <Field label="Description" className="col-span-2"><Input value={desc} onChange={(e) => setDesc(e.target.value)} /></Field>
         </div>
-        <DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button><Button disabled={!file || busy} onClick={go} data-testid="button-upload-document">{busy && <Loader2 className="animate-spin" />}Upload</Button></DialogFooter>
+        {files.length > 1 && <p className="text-xs text-muted-foreground -mt-1">Category, financial year and description apply to every selected file; each can be edited afterwards.</p>}
+        <DialogFooter>
+          <Button variant="outline" disabled={busy} onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button disabled={!files.length || busy} onClick={go} data-testid="button-upload-document">
+            {busy && <Loader2 className="animate-spin" />}
+            {busy && files.length > 1 ? `Uploading ${progress! + 1} of ${files.length}` : files.length > 1 ? `Upload ${files.length} files` : "Upload"}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
