@@ -10,13 +10,14 @@ const router: IRouter = Router();
 router.post("/auth/sign-up", async (req, res): Promise<void> => {
   const parsed = SignUpBody.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: "Enter a valid email, your name and a password of at least 8 characters" });
+    res.status(400).json({ error: "Enter a valid email and a password of at least 8 characters" });
     return;
   }
   const email = parsed.data.email.trim().toLowerCase();
+  const displayName = parsed.data.displayName?.trim() || email.split("@")[0];
   const [user] = await db
     .insert(usersTable)
-    .values({ email, displayName: parsed.data.displayName.trim(), passwordHash: await hashPassword(parsed.data.password) })
+    .values({ email, displayName, passwordHash: await hashPassword(parsed.data.password) })
     .onConflictDoNothing()
     .returning();
   if (!user) {

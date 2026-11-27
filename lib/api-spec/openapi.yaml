@@ -1356,7 +1356,7 @@ components:
         onboarded: { type: boolean }
     SignUpBody:
       type: object
-      required: [email, password, displayName]
+      required: [email, password]
       properties:
         email: { type: string, format: email }
         password: { type: string, minLength: 8, maxLength: 200 }

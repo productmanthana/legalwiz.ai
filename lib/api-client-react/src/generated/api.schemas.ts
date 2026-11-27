@@ -78,7 +78,7 @@ export interface SignUpBody {
      * @minLength 1
      * @maxLength 120
      */
-  displayName: string;
+  displayName?: string;
 }
 
 export interface SignInBody {

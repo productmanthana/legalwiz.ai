@@ -36,7 +36,6 @@ function AuthForm({ kind }: { kind: "in" | "up" }) {
   const queryClient = useQueryClient();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [displayName, setDisplayName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const onDone = (me: unknown) => {
     queryClient.clear();
@@ -52,7 +51,7 @@ function AuthForm({ kind }: { kind: "in" | "up" }) {
     e.preventDefault();
     setError(null);
     if (kind === "in") signIn.mutate({ data: { email, password } });
-    else signUp.mutate({ data: { email, password, displayName } });
+    else signUp.mutate({ data: { email, password } });
   };
 
   return (
@@ -64,12 +63,6 @@ function AuthForm({ kind }: { kind: "in" | "up" }) {
             {kind === "in" ? "Your case registers are waiting" : "For subjects, advocates, chartered accountants and authorised officers"}
           </p>
         </div>
-        {kind === "up" && (
-          <div className="space-y-1.5">
-            <Label htmlFor="displayName">Full name</Label>
-            <Input id="displayName" required value={displayName} onChange={(e) => setDisplayName(e.target.value)} autoComplete="name" data-testid="input-name" />
-          </div>
-        )}
         <div className="space-y-1.5">
           <Label htmlFor="email">Email</Label>
           <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" data-testid="input-email" />

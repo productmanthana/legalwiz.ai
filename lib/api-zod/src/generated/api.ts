@@ -26,7 +26,7 @@ export const signUpBodyDisplayNameMax = 120;
 export const SignUpBody = zod.object({
   "email": zod.email(),
   "password": zod.string().min(signUpBodyPasswordMin).max(signUpBodyPasswordMax),
-  "displayName": zod.string().min(1).max(signUpBodyDisplayNameMax)
+  "displayName": zod.string().min(1).max(signUpBodyDisplayNameMax).optional()
 })
 
 export const SignUpResponse = zod.object({
