@@ -5,8 +5,11 @@
  * FINTRACE API
  * OpenAPI spec version: 0.1.0
  */
+import type { AssistantQuestionLanguage } from './assistantQuestionLanguage';
 
 export interface AssistantQuestion {
   /** @minLength 1 */
   message: string;
+  /** Answer language: English (default) or Kannada */
+  language?: AssistantQuestionLanguage;
 }

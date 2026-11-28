@@ -22,6 +22,7 @@ import { blindSpots, daCalculation } from "../lib/schedules";
 import { weaviateConfigured } from "../lib/weaviate";
 import { documentPassages } from "../lib/assistantContext";
 import { answerReport } from "../lib/assistantExport";
+import { addJudgmentLinks } from "../lib/judgmentLinks";
 import { renderDocx, renderPdf, renderXlsx } from "../lib/reports";
 
 const router: IRouter = Router();
@@ -136,7 +137,7 @@ STATEMENT FORMAT — use it whenever the user asks for a statement, schedule, mo
 7. "## Relevance to DA cases – judicial precedents".
 Number Parts only for the sources that exist. Write Indian digit grouping without "Rs." inside tables whose header says (₹).
 Quote them with the document name and page (e.g. "Sale deed, p. 4"). Passages "read by vision model" were transcribed from scanned pages or images and must be checked against the original.
-Return JSON: {"answer": string, "citations": [{"kind": "transaction"|"document"|"asset"|"legal_reference"|"ledger_entry", "id": number, "page"?: number}]} citing the records you relied on by id (for a document passage use its documentId and page).`,
+${parsed.data.language === "kn" ? 'LANGUAGE: Write the whole answer (headings, paragraphs, table headers and remarks) in Kannada (ಕನ್ನಡ). Keep case names, court names, document names, dates, amounts and reference numbers in English exactly as they appear, and keep the [[S..]] markers unchanged.\n' : ""}Return JSON: {"answer": string, "citations": [{"kind": "transaction"|"document"|"asset"|"legal_reference"|"ledger_entry", "id": number, "page"?: number}]} citing the records you relied on by id (for a document passage use its documentId and page).`,
       `CASE DATA:\n${JSON.stringify(context)}\n\nCONVERSATION:\n${convo}`,
       tools,
     );
@@ -159,6 +160,7 @@ Return JSON: {"answer": string, "citations": [{"kind": "transaction"|"document"|
       else if (!label) dropped++;
     }
     let answer = expandStatementMarkers(out.answer?.trim() || "No answer was produced.", tables).replace(/\n{3,}/g, "\n\n");
+    answer = addJudgmentLinks(answer, judgments, parsed.data.language === "kn" ? "ತೀರ್ಪಿನ ಪ್ರತಿ" : "Judgment copy");
     if (dropped > 0) answer += `\n\n_${dropped} citation(s) were removed because they did not match records in this case._`;
     const msg = await save(answer, citations, true);
     await audit(req, { caseId, caseTitle: ctx.c.title, action: "assistant.asked", entityType: "assistant_message", entityId: msg.id, summary: `Asked the AI assistant: ${parsed.data.message.slice(0, 120)}` });

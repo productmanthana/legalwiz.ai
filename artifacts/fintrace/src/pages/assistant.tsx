@@ -40,18 +40,37 @@ function ExportLinks({ caseId, messageId }: { caseId: number; messageId: number 
   );
 }
 
+type Lang = "en" | "kn";
+const LANGS: { v: Lang; label: string }[] = [{ v: "en", label: "English" }, { v: "kn", label: "ಕನ್ನಡ" }];
+
+function LanguageToggle({ value, onChange }: { value: Lang; onChange: (v: Lang) => void }) {
+  return (
+    <div className="flex items-center gap-2 px-4 py-2 border-b">
+      <span className="text-[11px] text-muted-foreground">Answer language</span>
+      <div className="inline-flex rounded-md border p-0.5 bg-muted/40" role="radiogroup" aria-label="Answer language">
+        {LANGS.map((l) => (
+          <button key={l.v} type="button" role="radio" aria-checked={value === l.v} onClick={() => onChange(l.v)} data-testid={`button-lang-${l.v}`}
+            className={cn("px-2.5 py-0.5 text-xs rounded font-medium", value === l.v ? "bg-card shadow-xs text-primary" : "text-muted-foreground hover:text-foreground")}>{l.label}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Body({ c }: { c: Case }) {
   const caseId = c.id;
   const q = useListAssistantMessages(caseId);
   const ask = useAskAssistant();
   const inv = useInvalidate(); const { toast } = useToast();
   const [msg, setMsg] = useState(""); const [pending, setPending] = useState<string | null>(null);
+  const [lang, setLangState] = useState<Lang>(() => (localStorage.getItem("assistant-lang") === "kn" ? "kn" : "en"));
+  const setLang = (v: Lang) => { setLangState(v); localStorage.setItem("assistant-lang", v); };
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => { end.current?.scrollIntoView({ behavior: "smooth" }); }, [q.data?.length, pending]);
   const send = (text: string) => {
     if (!text.trim()) return;
     setPending(text); setMsg("");
-    ask.mutate({ caseId, data: { message: text } }, {
+    ask.mutate({ caseId, data: { message: text, language: lang } }, {
       onSuccess: () => inv(getListAssistantMessagesQueryKey(caseId)).then(() => setPending(null)),
       onError: (e) => { setPending(null); setMsg(text); toast({ title: "Assistant failed", description: errMsg(e), variant: "destructive" }); },
     });
@@ -60,6 +79,7 @@ function Body({ c }: { c: Case }) {
   return (
     <div className="grid lg:grid-cols-[1fr_280px] gap-5">
       <div className="min-w-0 rounded-lg border bg-card shadow-xs flex flex-col h-[calc(100dvh-220px)] min-h-[460px]">
+        <LanguageToggle value={lang} onChange={setLang} />
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {q.isLoading ? <LoadingRows /> : q.isError ? <ErrorState error={q.error} onRetry={() => q.refetch()} /> : !q.data?.length && !pending ? (
             <div className="h-full grid place-items-center text-center">

@@ -9,7 +9,7 @@ const plain = (s: string) =>
     .replace(/__(.+?)__/g, "$1")
     .replace(/(^|\s)[*_](\S.*?\S|\S)[*_](?=\s|$|[.,;:])/g, "$1$2")
     .replace(/`([^`]+)`/g, "$1")
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1 ($2)")
     .trim();
 
 const rawCells = (line: string) => line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|");

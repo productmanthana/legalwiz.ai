@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
 
 function inline(text: string): ReactNode[] {
-  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`|\*[^*]+\*)/g);
+  const parts = text.split(/(\[[^\]]+\]\(https?:\/\/[^)\s]+\)|\*\*[^*]+\*\*|`[^`]+`|\*[^*]+\*)/g);
   return parts.map((p, i) => {
+    const link = p.match(/^\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)$/);
+    if (link) return <a key={i} href={link[2]} target="_blank" rel="noopener noreferrer" className="text-[hsl(var(--teal))] underline underline-offset-2 hover:opacity-80 whitespace-nowrap">{link[1]}</a>;
     if (p.startsWith("**") && p.endsWith("**")) return <strong key={i}>{p.slice(2, -2)}</strong>;
     if (p.startsWith("`") && p.endsWith("`")) return <code key={i} className="num text-[12px] bg-muted px-1 rounded">{p.slice(1, -1)}</code>;
     if (p.startsWith("*") && p.endsWith("*") && p.length > 2) return <em key={i}>{p.slice(1, -1)}</em>;

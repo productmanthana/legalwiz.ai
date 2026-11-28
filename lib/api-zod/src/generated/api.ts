@@ -2663,7 +2663,8 @@ export const AskAssistantParams = zod.object({
 
 
 export const AskAssistantBody = zod.object({
-  "message": zod.string().min(1)
+  "message": zod.string().min(1),
+  "language": zod.enum(['en', 'kn']).optional().describe('Answer language: English (default) or Kannada')
 })
 
 export const AskAssistantResponse = zod.object({

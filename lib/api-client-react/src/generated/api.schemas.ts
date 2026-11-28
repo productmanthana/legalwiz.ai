@@ -2160,9 +2160,22 @@ export interface AssistantMessage {
   createdAt: string;
 }
 
+/**
+ * Answer language: English (default) or Kannada
+ */
+export type AssistantQuestionLanguage = typeof AssistantQuestionLanguage[keyof typeof AssistantQuestionLanguage];
+
+
+export const AssistantQuestionLanguage = {
+  en: 'en',
+  kn: 'kn',
+} as const;
+
 export interface AssistantQuestion {
   /** @minLength 1 */
   message: string;
+  /** Answer language: English (default) or Kannada */
+  language?: AssistantQuestionLanguage;
 }
 
 export type ReportTypeFormatsItem = typeof ReportTypeFormatsItem[keyof typeof ReportTypeFormatsItem];
