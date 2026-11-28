@@ -7,7 +7,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { CaseLayout, access, useCaseId } from "@/components/case-layout";
+import { CaseLayout, access } from "@/components/case-layout";
 import { Panel, LoadingRows, ErrorState, EmptyState, Tag, useInvalidate, Notice, nativeSelect, Field, ConfirmButton } from "@/components/common";
 import { EntityFormDialog, type FieldDef } from "@/components/entity-form";
 import { DOC_CATEGORIES, fdatetime, human, n, errMsg, opts } from "@/lib/format";
@@ -20,8 +20,7 @@ async function sha256(file: File) {
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-function UploadDialog({ open, onOpenChange, prev }: { open: boolean; onOpenChange: (o: boolean) => void; prev?: Document | null }) {
-  const caseId = useCaseId();
+function UploadDialog({ caseId, open, onOpenChange, prev }: { caseId: number; open: boolean; onOpenChange: (o: boolean) => void; prev?: Document | null }) {
   const reqUrl = useRequestUploadUrl(); const create = useCreateDocument();
   const inv = useInvalidate(); const { toast } = useToast();
   // A new version replaces exactly one document; a fresh upload may take several files at once.
@@ -112,8 +111,8 @@ function UploadDialog({ open, onOpenChange, prev }: { open: boolean; onOpenChang
   );
 }
 
-function Body({ c }: { c: Case }) {
-  const caseId = useCaseId();
+export function DocumentsBody({ c }: { c: Case }) {
+  const caseId = c.id;
   const a = access(c);
   const inv = useInvalidate(); const { toast } = useToast();
   const [cat, setCat] = useState(""); const [s, setS] = useState("");
@@ -171,7 +170,7 @@ function Body({ c }: { c: Case }) {
         )}
       </Panel>
       <Notice>Files are kept in private object storage. Downloads require your signed-in session.</Notice>
-      <UploadDialog key={up.prev?.id ?? "new"} open={up.open} prev={up.prev} onOpenChange={(o) => setUp({ open: o, prev: o ? up.prev : null })} />
+      <UploadDialog caseId={caseId} key={up.prev?.id ?? "new"} open={up.open} prev={up.prev} onOpenChange={(o) => setUp({ open: o, prev: o ? up.prev : null })} />
       <EntityFormDialog open={!!edit} onOpenChange={(o) => !o && setEdit(null)} title="Edit document" fields={fields} initial={edit as unknown as Record<string, unknown>} pending={upd.isPending}
         onSubmit={(v) => edit && upd.mutate({ documentId: edit.id, data: v as never }, { onSuccess: () => { setEdit(null); inv(getListDocumentsQueryKey(caseId)); }, onError: fail })} />
     </div>
@@ -179,5 +178,5 @@ function Body({ c }: { c: Case }) {
 }
 
 export default function Documents() {
-  return <CaseLayout>{(c) => <Body c={c} />}</CaseLayout>;
+  return <CaseLayout>{(c) => <DocumentsBody c={c} />}</CaseLayout>;
 }

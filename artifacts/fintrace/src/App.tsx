@@ -25,6 +25,7 @@ import IncomeTax from "@/pages/income-tax";
 import Queries from "@/pages/queries";
 import QueryDetail from "@/pages/query-detail";
 import Documents from "@/pages/documents";
+import DocumentsLibrary from "@/pages/documents-library";
 import Assistant, { CaseAssistantRedirect } from "@/pages/assistant";
 import CaseLegal from "@/pages/case-legal";
 import Reports from "@/pages/reports";
@@ -78,7 +79,7 @@ const P = {
   onboarding: protect(Onboarding, { onboarding: true }),
   dashboard: protect(Dashboard), cases: protect(Cases), caseOverview: protect(CaseOverview), accounts: protect(Accounts),
   transactions: protect(Transactions), reconciliation: protect(Reconciliation), ie: protect(IncomeExpenditure), assets: protect(Assets),
-  family: protect(Family), lokayukta: protect(Lokayukta), incomeTax: protect(IncomeTax), queries: protect(Queries), queryDetail: protect(QueryDetail), documents: protect(Documents),
+  family: protect(Family), lokayukta: protect(Lokayukta), incomeTax: protect(IncomeTax), queries: protect(Queries), queryDetail: protect(QueryDetail), documents: protect(Documents), documentsLibrary: protect(DocumentsLibrary),
   assistant: protect(Assistant), caseLegal: protect(CaseLegal), reports: protect(Reports), legal: protect(Legal), audit: protect(Audit), settings: protect(SettingsPage),
 };
 
@@ -108,6 +109,8 @@ function AppRoutes() {
             <Route path="/cases/:caseId/assistant" component={CaseAssistantRedirect} />
             <Route path="/cases/:caseId/legal" component={P.caseLegal} />
             <Route path="/cases/:caseId/reports" component={P.reports} />
+            <Route path="/documents" component={P.documentsLibrary} />
+            <Route path="/documents/:caseId" component={P.documentsLibrary} />
             <Route path="/assistant" component={P.assistant} />
             <Route path="/assistant/:caseId" component={P.assistant} />
             <Route path="/legal" component={P.legal} />
