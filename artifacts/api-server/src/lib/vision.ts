@@ -30,7 +30,8 @@ const modelParams = (model: string, maxTokens: number) =>
   /^(gpt-4|chatgpt)/.test(model) ? { model, max_tokens: maxTokens, temperature: 0 } : { model, max_completion_tokens: maxTokens };
 
 const RULES = `Never use ASCII art or box-drawing characters. Use markdown tables for tables and numbered lists for diagrams.
-Copy numbers, amounts, dates, account numbers, PAN and names exactly as printed; write [illegible] where you cannot read something. Do not add commentary or interpretation.`;
+Copy numbers, amounts, dates, account numbers, PAN and names exactly as printed; write [illegible] where you cannot read something. Do not add commentary or interpretation.
+When any text (printed or handwritten) is in Kannada or another non-English language, transcribe it in its original script and then add a section "**English translation:**" giving a complete, faithful English translation of ALL of that text, including handwritten entries, form labels with their filled values, stamps and seals. Keep names, numbers, amounts and dates exactly as written (transliterate names into English letters). Mark unreadable parts [illegible] in the translation too.`;
 
 /** Full transcription — for scanned pages or image files with no usable text layer. */
 const OCR_PROMPT = `You are an OCR expert for Indian financial and legal documents (bank statements, ITRs, sale deeds, notices, affidavits).
