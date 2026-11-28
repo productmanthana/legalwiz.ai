@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, Redirect, useLocation, useParams } from "wouter";
 import { Send, Loader2, Bot, CloudOff, Download } from "lucide-react";
-import { useListAssistantMessages, useAskAssistant, useListCases, useGetCase, getGetCaseQueryKey, getListAssistantMessagesQueryKey, type Case, type AssistantMessageCitationsItem } from "@workspace/api-client-react";
+import { useListAssistantMessages, useAskAssistant, useListCases, useGetCase, getGetCaseQueryKey, getListAssistantMessagesQueryKey, type Case } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { LoadingRows, ErrorState, EmptyState, Tag, useInvalidate, Notice, PageHeader, nativeSelect } from "@/components/common";
@@ -15,10 +15,6 @@ import { SourcePages } from "@/components/source-pages";
 
 const PROMPTS = ["Show every debit and credit with Jayappa across all years.", "Which credits above ₹2 lakh are still unclassified?", "Summarise cash deposits by financial year.", "What explains the largest asset acquired in the check period?", "Which family members have no documented income?"];
 
-function citeHref(caseId: number, c: AssistantMessageCitationsItem) {
-  const b = `/cases/${caseId}`;
-  return { transaction: `${b}/transactions`, document: `${b}/documents`, asset: `${b}/assets`, legal_reference: `${b}/legal`, ledger_entry: `${b}/income-expenditure` }[c.kind] ?? b;
-}
 
 const EXPORTS = [{ f: "xlsx", label: "Excel" }, { f: "docx", label: "Word" }, { f: "pdf", label: "PDF" }];
 
@@ -96,7 +92,6 @@ function Body({ c }: { c: Case }) {
                     {m.role !== "user" && m.available === false && <div className="flex items-center gap-2 mb-1.5"><Tag><CloudOff className="h-3 w-3" />AI unavailable</Tag></div>}
                     {m.role === "user" ? <div className="text-sm whitespace-pre-wrap">{m.content}</div> : <Markdown content={m.content} />}
                     {!!m.citations?.length && <SourcePages citations={m.citations} />}
-                    {!!m.citations?.length && <div className="flex flex-wrap gap-1 mt-2">{m.citations.map((ct, i) => <Link key={i} href={citeHref(caseId, ct)} className="inline-flex"><Tag tone="teal">{human(ct.kind)} #{ct.id} · {ct.label}</Tag></Link>)}</div>}
                     <div className={cn("text-[10px] mt-1.5", m.role === "user" ? "text-primary-foreground/60" : "text-muted-foreground")}>{fdatetime(m.createdAt)}</div>
                     {m.role !== "user" && m.available !== false && <ExportLinks caseId={caseId} messageId={m.id} />}
                   </div>
@@ -118,7 +113,7 @@ function Body({ c }: { c: Case }) {
       </div>
       <div className="space-y-3">
         <Notice tone="teal">The assistant only sees this case. It does not give legal advice and cannot decide whether income or assets are lawful.</Notice>
-        <Notice>Citations link to the records an answer relied on. Open them and check before relying on the answer.</Notice>
+        <Notice>Pages from your documents that an answer relied on are shown below it. Click a page to enlarge it and check the figures.</Notice>
       </div>
     </div>
   );
