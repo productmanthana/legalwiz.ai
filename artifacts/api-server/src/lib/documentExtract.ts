@@ -5,7 +5,8 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as XLSX from "xlsx";
 import mammoth from "mammoth";
-import { readPageImage, visionConfigured } from "./vision";
+import { readPageImage, readPageStrip, visionConfigured, type StripRead } from "./vision";
+import { cleanRow, joinStripRows, joinStripText, reconcileRows, renderRows, reviewCount, type TxnRow } from "./statementRows";
 
 const run = promisify(execFile);
 
@@ -66,8 +67,9 @@ export async function extractDocument(buf: Buffer, name: string, contentType: st
       if (!visionConfigured()) throw new Error("Image files need the vision model, which is not configured (set OPENAI_API_KEY).");
       const ext = name.split(".").pop()?.toLowerCase() ?? "";
       const mime = contentType.startsWith("image/") ? contentType : IMAGE_MIME[ext] ?? "image/png";
-      const text = await readPageImage(buf, mime, "ocr");
-      return { kind, pages: text ? [{ pageNumber: 1, text, method: "vision" }] : [], warnings };
+      const page: ExtractedPage = { pageNumber: 1, text: "", method: "vision" };
+      finishScans([{ page, scan: toScanRead([await readPageStrip(buf, mime, "the whole page")]) }]);
+      return { kind, pages: page.text ? [page] : [], warnings };
     }
     case "word": {
       if (!(await wordHasImages(buf))) {
@@ -160,6 +162,80 @@ async function renderPage(pdfPath: string, dir: string, page: number): Promise<B
   return img;
 }
 
+/** Rendered size in pixels of one page at `dpi`, accounting for page rotation. */
+async function pageSizePx(pdfPath: string, page: number, dpi: number): Promise<{ w: number; h: number }> {
+  const { stdout } = await run("pdfinfo", ["-f", String(page), "-l", String(page), pdfPath]);
+  const size = stdout.match(new RegExp(`Page\\s+${page} size:\\s*([\\d.]+) x ([\\d.]+)`));
+  const rot = Number(stdout.match(new RegExp(`Page\\s+${page} rot:\\s*(\\d+)`))?.[1] ?? 0);
+  let w = Number(size?.[1] ?? 595);
+  let h = Number(size?.[2] ?? 842);
+  if (rot % 180 === 90) [w, h] = [h, w];
+  return { w: Math.ceil((w * dpi) / 72), h: Math.ceil((h * dpi) / 72) };
+}
+
+type ScanRead = { text: string; rows: TxnRow[] };
+/** Scanned-page reading passes: the second, sharper pass runs only when rows fail the balance check. */
+const SCAN_PASSES = [
+  { dpi: 200, stripPx: 800 },
+  { dpi: 300, stripPx: 700 },
+];
+
+function toScanRead(reads: StripRead[]): ScanRead {
+  return {
+    text: joinStripText(reads.map((r) => r.text)),
+    rows: joinStripRows(reads.map((r) => r.rows.map(cleanRow).filter((x): x is TxnRow => x !== null))),
+  };
+}
+
+/** Rows on the page that do not agree with the running balance (checked on copies). */
+const pageReviewCount = (rows: TxnRow[]) => reviewCount(reconcileRows(rows.map((r) => ({ ...r }))));
+
+/**
+ * Reads a scanned page as overlapping horizontal strips so dense statement rows stay legible
+ * to the vision model, then joins the strips without repeating the overlap.
+ */
+async function readScannedPage(pdfPath: string, dir: string, page: number, pass: (typeof SCAN_PASSES)[number]): Promise<ScanRead> {
+  const { dpi, stripPx } = pass;
+  const { w, h } = await pageSizePx(pdfPath, page, dpi);
+  const overlap = Math.round(dpi * 0.45);
+  const n = Math.max(1, Math.ceil((h - overlap) / (stripPx - overlap)));
+  const stripH = Math.ceil((h + (n - 1) * overlap) / n);
+  const reads: StripRead[] = [];
+  for (let i = 0; i < n; i++) {
+    const y = i * (stripH - overlap);
+    const out = path.join(dir, `p${page}-${dpi}-${i}`);
+    await run("pdftoppm", ["-png", "-gray", "-r", String(dpi), "-f", String(page), "-l", String(page), "-x", "0", "-y", String(y), "-W", String(w), "-H", String(Math.min(stripH, h - y)), "-singlefile", pdfPath, out], { timeout: 120_000 });
+    const img = await fs.readFile(`${out}.png`);
+    await fs.rm(`${out}.png`, { force: true });
+    reads.push(await readPageStrip(img, "image/png", n === 1 ? "the whole page" : `strip ${i + 1} of ${n} of the page (top to bottom)`));
+  }
+  return toScanRead(reads);
+}
+
+async function readScannedPageChecked(pdfPath: string, dir: string, page: number): Promise<ScanRead> {
+  let best = await readScannedPage(pdfPath, dir, page, SCAN_PASSES[0]!);
+  if (pageReviewCount(best.rows) === 0) return best;
+  const again = await readScannedPage(pdfPath, dir, page, SCAN_PASSES[1]!);
+  if (pageReviewCount(again.rows) < pageReviewCount(best.rows)) best = again;
+  return best;
+}
+
+/** Checks rows across the whole document in page order and writes each page's final text. */
+function finishScans(scans: { page: ExtractedPage; scan: ScanRead }[]): void {
+  scans.sort((a, b) => a.page.pageNumber - b.page.pageNumber);
+  const owner = new Map<TxnRow, number>();
+  scans.forEach((s, i) => s.scan.rows.forEach((r) => owner.set(r, i)));
+  const kept = new Set(reconcileRows(scans.flatMap((s) => s.scan.rows)));
+  let no = 1;
+  for (const [i, s] of scans.entries()) {
+    const rows = s.scan.rows.filter((r) => kept.has(r) && owner.get(r) === i);
+    const table = renderRows(rows, no);
+    no += rows.filter((r) => r.kind === "txn").length;
+    s.page.text = [s.scan.text, table].filter(Boolean).join("\n\n");
+    s.page.method = "vision";
+  }
+}
+
 async function pdfPages(pdf: Buffer, warnings: string[]): Promise<ExtractedPage[]> {
   if (!(await hasBinary("pdftotext"))) throw new Error("PDF tools (poppler-utils) are not installed on the server.");
   return withTmp(async (dir) => {
@@ -185,19 +261,20 @@ async function pdfPages(pdf: Buffer, warnings: string[]): Promise<ExtractedPage[
     let failed = 0;
     let firstError = "";
     let next = 0;
+    const scans: { page: ExtractedPage; scan: ScanRead }[] = [];
     const worker = async () => {
       while (next < queue.length) {
         const page = queue[next++]!;
         const scanned = page.text.trim().length < MIN_TEXT_CHARS;
         try {
-          const img = await renderPage(pdfPath, dir, page.pageNumber);
-          const out = await readPageImage(img, "image/png", scanned ? "ocr" : "visual");
           if (scanned) {
-            if (out) {
-              page.text = out;
-              page.method = "vision";
-            }
-          } else if (out) {
+            const scan = await readScannedPageChecked(pdfPath, dir, page.pageNumber);
+            if (scan.text || scan.rows.length) scans.push({ page, scan });
+            continue;
+          }
+          const img = await renderPage(pdfPath, dir, page.pageNumber);
+          const out = await readPageImage(img, "image/png", "visual");
+          if (out) {
             page.text = `${page.text}\n\n[Visual content on this page]\n${out}`;
             page.method = "mixed";
           }
@@ -208,6 +285,9 @@ async function pdfPages(pdf: Buffer, warnings: string[]): Promise<ExtractedPage[
       }
     };
     await Promise.all(Array.from({ length: VISION_CONCURRENCY }, worker));
+    finishScans(scans);
+    const review = scans.reduce((n, s) => n + reviewCount(s.scan.rows), 0);
+    if (review) warnings.push(`${review} transaction row(s) read from scanned pages do not agree with the printed running balance; they are flagged "check original" in the extracted text.`);
     if (failed) warnings.push(`Vision reading failed on ${failed} page(s) (${firstError}); their text layer (if any) was indexed.`);
     return pages;
   });

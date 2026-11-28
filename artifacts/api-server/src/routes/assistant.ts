@@ -15,7 +15,8 @@ import {
 import { AskAssistantBody } from "@workspace/api-zod";
 import { intParam, loadCase } from "../lib/access";
 import { audit } from "../lib/audit";
-import { aiConfigured, completeJson, GUARDRAILS } from "../lib/ai";
+import { aiConfigured, completeJsonWithTools, GUARDRAILS } from "../lib/ai";
+import { assistantTools } from "../lib/assistantTools";
 import { blindSpots, daCalculation } from "../lib/schedules";
 import { weaviateConfigured } from "../lib/weaviate";
 import { documentPassages } from "../lib/assistantContext";
@@ -105,18 +106,21 @@ router.post("/cases/:caseId/assistant/messages", async (req, res): Promise<void>
     blindSpots: spots.map((s) => ({ title: s.title, severity: s.severity, status: s.reviewStatus })),
     legalReferences: links.map((l) => ({ id: l.ref.id, title: l.ref.title, citation: l.ref.citation, verificationStatus: l.ref.verificationStatus, principle: l.ref.principle })),
   };
+  const tools = assistantTools(passages);
   const convo = history.slice(-10).map((m) => `${m.role.toUpperCase()}: ${m.content}`).join("\n\n");
 
   try {
-    const out = await completeJson<{ answer?: string; citations?: { kind?: string; id?: number; page?: number }[] }>(
+    const out = await completeJsonWithTools<{ answer?: string; citations?: { kind?: string; id?: number; page?: number }[] }>(
       `${GUARDRAILS}
 You answer questions about one case using the JSON case data supplied. Format the answer as concise Markdown. Prefix each key point with a bold label: **Verified fact**, **User-provided**, **AI suggestion**, or **Missing information**.
 documentPassages hold text of the case's uploaded documents, one entry per page. When documentTextIsComplete is true they are the COMPLETE text of every page of every document: answer from all of them, and for totals or lists go through every page and every matching entry. When it is false they are only the best-matching excerpts: say so under **Missing information**.
 When the question asks for data, totals, lists or schedules, present the itemised entries as a Markdown table (with date, document, page, description and amount columns where available) followed by the total row.
 Always end with a **Missing information** section listing what is missing, illegible or uncertain (unreadable pages, gaps in periods, conflicting figures) and what the user should provide; write "None identified" if nothing is missing.
+TOTALS MUST COME FROM THE TOOLS, never from your own arithmetic. Scanned statements carry a table "| # | Date | Ref | Particulars | Debit | Credit | Balance | Check |" whose rows were checked against the printed running balance. To total a kind of entry (e.g. pension), do not rely on one keyword: first call sum_statement_rows with the column and date range but no keywords to get every candidate row, classify each row yourself from its particulars (OCR spellings vary, e.g. "PEN", "Fension", "pensicn", "DA arrear", "DR ARREAR PAYMENT"; unlabelled credits are not counted), then call it again with rowRefs listing exactly the rows you chose and report that total. Consider related debits too (e.g. a recovery of excess pension) and say how you treated them. For any other figures (schedules, tables in text, ledger data) pass the itemised amounts to add_numbers. State the row count and the tool's total; list rows marked "check original" under **Missing information**. Where two documents cover the same period (e.g. a pension schedule and the bank credits), do not double count: say which source each period is taken from and reconcile the overlap.
 Quote them with the document name and page (e.g. "Sale deed, p. 4"). Passages "read by vision model" were transcribed from scanned pages or images and must be checked against the original.
 Return JSON: {"answer": string, "citations": [{"kind": "transaction"|"document"|"asset"|"legal_reference"|"ledger_entry", "id": number, "page"?: number}]} citing the records you relied on by id (for a document passage use its documentId and page).`,
       `CASE DATA:\n${JSON.stringify(context)}\n\nCONVERSATION:\n${convo}`,
+      tools,
     );
     // Validate every citation against the case; drop anything the model invented.
     const lookups: Record<Citation["kind"], Map<number, string>> = {

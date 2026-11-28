@@ -1,3 +1,5 @@
+import type { Response as AiResponse, ResponseInput } from "openai/resources/responses/responses";
+
 type OpenAI = typeof import("@workspace/integrations-openai-ai-server").openai;
 
 export function aiConfigured(): boolean {
@@ -29,6 +31,50 @@ export async function completeJson<T>(system: string, user: string): Promise<T> 
   });
   const text = resp.choices[0]?.message?.content ?? "";
   return JSON.parse(text) as T;
+}
+
+export type AiTool = { name: string; description: string; parameters: Record<string, unknown>; run: (args: Record<string, unknown>) => unknown };
+
+/**
+ * Like completeJson, but the model may call tools (e.g. exact totals computed in code)
+ * before giving its final JSON answer.
+ */
+export async function completeJsonWithTools<T>(system: string, user: string, tools: AiTool[], maxRounds = 8): Promise<T> {
+  const openai = await getClient();
+  const fnTools = tools.map((t) => ({ type: "function" as const, name: t.name, description: t.description, parameters: t.parameters, strict: false }));
+  let previous: string | undefined;
+  // json_object output requires the word "json" in each round's input.
+  let input: string | ResponseInput = `${user}\n\nReply with the JSON object described.`;
+  for (let round = 0; round < maxRounds; round++) {
+    // Responses API: the model keeps its reasoning between tool calls via previous_response_id.
+    const resp: AiResponse = await openai.responses.create({
+      model: AI_MODEL,
+      instructions: system,
+      input,
+      previous_response_id: previous,
+      tools: fnTools,
+      tool_choice: round === maxRounds - 1 ? "none" : "auto",
+      text: { format: { type: "json_object" } },
+      max_output_tokens: 32000,
+    });
+    const calls = resp.output.filter((o) => o.type === "function_call");
+    if (calls.length === 0) return JSON.parse(resp.output_text) as T;
+    const outputs: ResponseInput = [];
+    for (const c of calls) {
+      const tool = tools.find((t) => t.name === c.name);
+      let result: unknown;
+      try {
+        result = tool ? await tool.run(JSON.parse(c.arguments || "{}")) : { error: `Unknown tool ${c.name}` };
+      } catch (err) {
+        result = { error: err instanceof Error ? err.message : String(err) };
+      }
+      outputs.push({ type: "function_call_output", call_id: c.call_id, output: JSON.stringify(result) });
+    }
+    outputs.push({ role: "user", content: "Tool results above. Continue; the final reply must be the JSON object." });
+    previous = resp.id;
+    input = outputs;
+  }
+  throw new Error("The model did not finish its answer.");
 }
 
 export const GUARDRAILS = `You assist advocates, chartered accountants and investigated persons in Indian financial investigations (Karnataka Lokayukta disproportionate-assets cases and Income Tax scrutiny).
