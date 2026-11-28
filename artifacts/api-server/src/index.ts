@@ -1,5 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { seedLegalLibrary } from "./lib/demo";
 
 const rawPort = process.env["PORT"];
 
@@ -22,4 +23,6 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+  // Make sure the starter legal library exists; only missing entries are added.
+  seedLegalLibrary().catch((e) => logger.error({ err: e }, "Seeding legal library failed"));
 });
