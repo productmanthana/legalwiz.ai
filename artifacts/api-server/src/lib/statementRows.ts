@@ -233,24 +233,74 @@ function editDistance(a: string, b: string): number {
   return d[b.length]!;
 }
 
-/**
- * Name match that tolerates OCR misreads and truncated narrations: the keyword appears in the
- * text, or a word of the text (5+ letters) is part of the keyword (e.g. "BHADRE" in
- * "kalaveerabhadreshwara"), or is within a small edit distance of it.
- */
-export function fuzzyNameMatch(text: string, keyword: string): boolean {
-  const k = keyword.toLowerCase().replace(/[^a-z0-9]/g, "");
-  if (!k) return false;
-  const t = text.toLowerCase();
-  if (t.includes(keyword.toLowerCase())) return true;
-  for (const w of t.split(/[^a-z0-9]+/)) {
+/** Honorifics and filler that never identify a party on their own. */
+const FILLER = new Set(["shri", "sri", "sree", "smt", "mr", "mrs", "ms", "dr", "and", "the", "from", "etc", "traders", "trader", "son", "wife", "of"]);
+
+/** Closest edit distance between word w and any same-length window of k (allows one misread letter in a cut-off name). */
+function windowDistance(w: string, k: string): number {
+  if (w.length > k.length) return editDistance(w.slice(0, k.length), k);
+  let best = Infinity;
+  for (let i = 0; i + w.length <= k.length; i++) best = Math.min(best, editDistance(w, k.slice(i, i + w.length)));
+  return best;
+}
+
+function wordMatch(words: string[], k: string): boolean {
+  for (const w of words) {
     if (w.length < 5 || /^\d+$/.test(w)) continue;
-    if (k.includes(w)) return true;
-    if (k.length >= 5 && w.includes(k)) return true;
+    if (k.includes(w) || (k.length >= 5 && w.includes(k))) return true;
     const n = Math.min(w.length, k.length);
     if (n >= 6 && editDistance(w.slice(0, n), k.slice(0, n)) <= Math.floor(n / 4)) return true;
+    if (w.length >= 6 && k.length >= 6 && windowDistance(w, k) <= 1) return true;
   }
   return false;
+}
+
+/**
+ * Name match that tolerates OCR misreads and truncated narrations: the keyword (in any script,
+ * e.g. Kannada) appears in the text, or a word of the text (5+ letters) is part of the keyword
+ * (e.g. "BHADRE" in "kalaveerabhadreshwara", "SIDENU" in "shidenur") or within a small edit
+ * distance of it. A phrase ("shri kalaveerabadres traders") matches when any distinctive word does.
+ */
+export function fuzzyNameMatch(text: string, keyword: string): boolean {
+  const kw = keyword.trim().toLowerCase();
+  if (!kw || !text) return false;
+  const t = text.toLowerCase();
+  if (t.includes(kw)) return true;
+  const words = t.split(/[^\p{L}\p{M}\p{N}]+/u);
+  const whole = kw.replace(/[^\p{L}\p{M}\p{N}]/gu, "");
+  if (whole && wordMatch(words, whole)) return true;
+  const parts = kw.split(/[^\p{L}\p{M}\p{N}]+/u).filter((p) => p.length >= 4 && !FILLER.has(p));
+  return parts.length > 0 && parts.some((p) => t.includes(p) || wordMatch(words, p));
+}
+
+/** Accepts YYYY-MM-DD, YYYY-MM, YYYY, DD-MM-YYYY or DD/MM/YYYY; partial dates widen to the start/end of the period. */
+export function normalizeDate(v: string | undefined, end: boolean): string | undefined {
+  const s = v?.trim();
+  if (!s) return undefined;
+  let m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+  if (m) return `${m[3]}-${m[2]!.padStart(2, "0")}-${m[1]!.padStart(2, "0")}`;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  m = s.match(/^(\d{4})-(\d{1,2})$/);
+  if (m) {
+    const mm = m[2]!.padStart(2, "0");
+    return end ? `${m[1]}-${mm}-${String(new Date(Date.UTC(Number(m[1]), Number(mm), 0)).getUTCDate()).padStart(2, "0")}` : `${m[1]}-${mm}-01`;
+  }
+  if (/^\d{4}$/.test(s)) return end ? `${s}-12-31` : `${s}-01-01`;
+  return s;
+}
+
+/** Date range of a query, normalised and put in order. */
+export function queryRange(q: { onDate?: string; fromDate?: string; toDate?: string }): { from?: string; to?: string } {
+  let from = normalizeDate(q.onDate || q.fromDate, false);
+  let to = normalizeDate(q.onDate || q.toDate, true);
+  if (from && to && from > to) [from, to] = [normalizeDate(q.onDate || q.toDate, false), normalizeDate(q.onDate || q.fromDate, true)];
+  return { from, to };
+}
+
+/** A keyword that is an amount ("4107", "4,107.00", "Rs 4107") matches a row of exactly that debit or credit. */
+export function amountOf(keyword: string): number | null {
+  const s = keyword.replace(/rs\.?|₹|,|\s/gi, "");
+  return /^\d+(\.\d{1,2})?$/.test(s) && Number(s) >= 1 ? Number(s) : null;
 }
 
 /** Bank codes that are not a party's name. */
@@ -263,15 +313,15 @@ const monthsBetween = (a: string, b: string) => (Number(b.slice(0, 4)) - Number(
 /** Every debit AND credit row matching names/keywords and dates, across all years, with per-year totals. */
 export function searchRows(rows: StoredRow[], q: SearchQuery) {
   const inc = (q.includeAny ?? []).filter((s) => s.trim());
-  const exc = (q.excludeAny ?? []).map((s) => s.toLowerCase()).filter(Boolean);
-  const from = q.onDate || q.fromDate;
-  const to = q.onDate || q.toDate;
+  const exc = (q.excludeAny ?? []).map((s) => s.trim().toLowerCase()).filter(Boolean);
+  const { from, to } = queryRange(q);
+  const amounts = inc.map(amountOf).filter((n): n is number => n !== null);
   const inRange = (r: StoredRow) => !(from && (!r.isoDate || r.isoDate < from)) && !(to && (!r.isoDate || r.isoDate > to));
   const isTxn = (r: StoredRow) => r.kind === "txn" && !!(r.debit || r.credit);
   const matched = rows.filter((r) => {
     if (!isTxn(r) || !inRange(r)) return false;
     const hay = `${r.particulars} ${r.ref}`;
-    if (inc.length && !inc.some((k) => fuzzyNameMatch(hay, k))) return false;
+    if (inc.length && !inc.some((k) => fuzzyNameMatch(hay, k)) && !amounts.some((a) => r.debit === a || r.credit === a)) return false;
     if (exc.some((k) => hay.toLowerCase().includes(k))) return false;
     return true;
   }).sort((a, b) => (a.isoDate ?? "").localeCompare(b.isoDate ?? ""));
@@ -327,8 +377,9 @@ export type RowQuery = {
 
 /** Exact total of the rows matching a query (keywords match particulars or ref, case-insensitive). */
 export function sumRows(rows: StoredRow[], q: RowQuery) {
-  const inc = (q.includeAny ?? []).map((s) => s.toLowerCase()).filter(Boolean);
-  const exc = (q.excludeAny ?? []).map((s) => s.toLowerCase()).filter(Boolean);
+  const inc = (q.includeAny ?? []).map((s) => s.trim().toLowerCase()).filter(Boolean);
+  const exc = (q.excludeAny ?? []).map((s) => s.trim().toLowerCase()).filter(Boolean);
+  const { from, to } = queryRange(q);
   const refs = new Set(q.rowRefs ?? []);
   const matched = rows.filter((r) => {
     const amt = r[q.column];
@@ -338,8 +389,8 @@ export function sumRows(rows: StoredRow[], q: RowQuery) {
     if (inc.length && !inc.some((k) => hay.includes(k))) return false;
     if (exc.some((k) => hay.includes(k))) return false;
     if (q.documentIds?.length && !q.documentIds.includes(r.documentId)) return false;
-    if (q.fromDate && (!r.isoDate || r.isoDate < q.fromDate)) return false;
-    if (q.toDate && (!r.isoDate || r.isoDate > q.toDate)) return false;
+    if (from && (!r.isoDate || r.isoDate < from)) return false;
+    if (to && (!r.isoDate || r.isoDate > to)) return false;
     return true;
   });
   const total = round2(matched.reduce((s, r) => s + (r[q.column] ?? 0), 0));

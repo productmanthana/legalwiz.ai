@@ -1,7 +1,7 @@
 import type { AiTool } from "./ai";
 import type { PagePassage } from "./assistantContext";
 import { round2 } from "./finance";
-import { fuzzyNameMatch, parseStoredRows, searchRows, sumRows, type RowQuery, type SearchQuery } from "./statementRows";
+import { amountOf, fuzzyNameMatch, queryRange, parseStoredRows, searchRows, sumRows, type RowQuery, type SearchQuery } from "./statementRows";
 import { buildStatementTables, type StatementTables } from "./statementTables";
 import { searchDocuments, type DocSearchQuery } from "./documentSearch";
 
@@ -22,7 +22,7 @@ export function assistantTools(passages: PagePassage[], ledger: LedgerTxn[] = []
       description:
         `Finds EVERY transaction, debits and credits together, in all uploaded statements (${rows.length} rows) and the case ledger (${ledger.length} transactions), across all years. ` +
         "Use it for questions about a person, party or account (e.g. every transaction with \"Jayappa\" — a 2022 debit and a 2025 credit are both returned), or about a particular day (onDate) or period. " +
-        "A row matches when its particulars match ANY includeAny keyword, tolerating OCR misreads and cut-off names (pass each name and its distinctive parts separately, e.g. for \"Sri Kalaveerabhadreshwara Traders\" pass [\"kalaveerabhadreshwara\", \"kalaveera\", \"bhadreshwara\", \"traders\"]; empty = all rows), NO excludeAny keyword, and its date is in range. " +
+        "A row matches when its particulars match ANY includeAny keyword, tolerating OCR misreads and cut-off names (pass each name and its distinctive parts separately, e.g. for \"Sri Kalaveerabhadreshwara Traders\" pass [\"kalaveerabhadreshwara\", \"kalaveera\", \"bhadreshwara\", \"traders\"]; Kannada spellings and exact amounts such as \"4107\" also work; empty = all rows), NO excludeAny keyword, and its date is in range. " +
         "Returns statement rows with documentId and page (for citing the page), totals by year, total debit, total credit and net, plus matching ledger transactions.",
       parameters: {
         type: "object",
@@ -30,18 +30,18 @@ export function assistantTools(passages: PagePassage[], ledger: LedgerTxn[] = []
           includeAny: strList,
           excludeAny: strList,
           onDate: { type: "string", description: "YYYY-MM-DD, a single day" },
-          fromDate: { type: "string", description: "YYYY-MM-DD, inclusive" },
-          toDate: { type: "string", description: "YYYY-MM-DD, inclusive" },
+          fromDate: { type: "string", description: "YYYY-MM-DD (or YYYY / YYYY-MM for the start of that year/month), inclusive" },
+          toDate: { type: "string", description: "YYYY-MM-DD (or YYYY / YYYY-MM for the end of that year/month), inclusive" },
         },
       },
       run: (args) => {
         const q = args as SearchQuery;
         const inc = (q.includeAny ?? []).filter((s) => s.trim());
         const exc = (q.excludeAny ?? []).map((s) => s.toLowerCase()).filter(Boolean);
-        const from = q.onDate || q.fromDate;
-        const to = q.onDate || q.toDate;
+        const { from, to } = queryRange(q);
+        const amounts = inc.map(amountOf).filter((n): n is number => n !== null);
         const led = ledger.filter((t) => {
-          if (inc.length && !inc.some((k) => fuzzyNameMatch(t.description, k))) return false;
+          if (inc.length && !inc.some((k) => fuzzyNameMatch(t.description, k)) && !amounts.some((a) => t.debit === a || t.credit === a)) return false;
           if (exc.some((k) => t.description.toLowerCase().includes(k))) return false;
           if (from && t.txnDate < from) return false;
           if (to && t.txnDate > to) return false;
