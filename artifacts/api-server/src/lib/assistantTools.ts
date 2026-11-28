@@ -2,13 +2,18 @@ import type { AiTool } from "./ai";
 import type { PagePassage } from "./assistantContext";
 import { round2 } from "./finance";
 import { parseStoredRows, sumRows, type RowQuery } from "./statementRows";
+import { buildStatementTables, type StatementTables } from "./statementTables";
 
 const strList = { type: "array", items: { type: "string" } };
 
-/** Tools that let the assistant get exact totals computed in code instead of adding numbers itself. */
-export function assistantTools(passages: PagePassage[]): AiTool[] {
+/**
+ * Tools that let the assistant get exact totals computed in code instead of adding numbers itself.
+ * `tables` collects statement tables built during the answer, keyed by their marker id (S1, S2…).
+ */
+export function assistantTools(passages: PagePassage[]): { tools: AiTool[]; tables: Map<string, StatementTables> } {
   const rows = parseStoredRows(passages);
-  return [
+  const tables = new Map<string, StatementTables>();
+  const tools: AiTool[] = [
     {
       name: "sum_statement_rows",
       description:
@@ -30,6 +35,29 @@ export function assistantTools(passages: PagePassage[]): AiTool[] {
       run: (args) => sumRows(rows, args as unknown as RowQuery),
     },
     {
+      name: "build_statement_tables",
+      description:
+        "Builds, in code, a month-wise table (every month from first to last entry, with entry count, credits, debits, net, dates and amounts, year subtotals and grand total) and a full list of every entry, from exactly the rows you choose. " +
+        "Pass creditRefs (rows counted in the credit column) and debitRefs (related debits, e.g. recoveries). Returns a marker id and the exact totals. Put [[<id>:monthly]] and/or [[<id>:entries]] on their own line in your answer where each table belongs; the server inserts the full table there. Never write those rows yourself.",
+      parameters: {
+        type: "object",
+        properties: {
+          creditRefs: strList,
+          debitRefs: strList,
+          creditLabel: { type: "string", description: "Column name for credits, e.g. \"Credited\"" },
+          debitLabel: { type: "string", description: "Column name for debits, e.g. \"Recovered\"" },
+        },
+        required: ["creditRefs"],
+      },
+      run: (args) => {
+        const a = args as { creditRefs?: string[]; debitRefs?: string[]; creditLabel?: string; debitLabel?: string };
+        const built = buildStatementTables(rows, a.creditRefs ?? [], a.debitRefs ?? [], a.creditLabel || undefined, a.debitLabel || undefined);
+        const id = `S${tables.size + 1}`;
+        tables.set(id, built.tables);
+        return { id, markers: [`[[${id}:monthly]]`, `[[${id}:entries]]`], ...built.summary };
+      },
+    },
+    {
       name: "add_numbers",
       description: "Exact sum of a list of amounts. Use for any total not covered by sum_statement_rows.",
       parameters: { type: "object", properties: { values: { type: "array", items: { type: "number" } } }, required: ["values"] },
@@ -39,4 +67,5 @@ export function assistantTools(passages: PagePassage[]): AiTool[] {
       },
     },
   ];
+  return { tools, tables };
 }

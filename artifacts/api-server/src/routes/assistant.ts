@@ -17,6 +17,7 @@ import { intParam, loadCase } from "../lib/access";
 import { audit } from "../lib/audit";
 import { aiConfigured, completeJsonWithTools, GUARDRAILS } from "../lib/ai";
 import { assistantTools } from "../lib/assistantTools";
+import { expandStatementMarkers } from "../lib/statementTables";
 import { blindSpots, daCalculation } from "../lib/schedules";
 import { weaviateConfigured } from "../lib/weaviate";
 import { documentPassages } from "../lib/assistantContext";
@@ -106,7 +107,7 @@ router.post("/cases/:caseId/assistant/messages", async (req, res): Promise<void>
     blindSpots: spots.map((s) => ({ title: s.title, severity: s.severity, status: s.reviewStatus })),
     legalReferences: links.map((l) => ({ id: l.ref.id, title: l.ref.title, citation: l.ref.citation, verificationStatus: l.ref.verificationStatus, principle: l.ref.principle })),
   };
-  const tools = assistantTools(passages);
+  const { tools, tables } = assistantTools(passages);
   const convo = history.slice(-10).map((m) => `${m.role.toUpperCase()}: ${m.content}`).join("\n\n");
 
   try {
@@ -116,7 +117,16 @@ You answer questions about one case using the JSON case data supplied. Format th
 documentPassages hold text of the case's uploaded documents, one entry per page. When documentTextIsComplete is true they are the COMPLETE text of every page of every document: answer from all of them, and for totals or lists go through every page and every matching entry. When it is false they are only the best-matching excerpts: say so under **Missing information**.
 When the question asks for data, totals, lists or schedules, present the itemised entries as a Markdown table (with date, document, page, description and amount columns where available) followed by the total row.
 Always end with a **Missing information** section listing what is missing, illegible or uncertain (unreadable pages, gaps in periods, conflicting figures) and what the user should provide; write "None identified" if nothing is missing.
-TOTALS MUST COME FROM THE TOOLS, never from your own arithmetic. Scanned statements carry a table "| # | Date | Ref | Particulars | Debit | Credit | Balance | Check |" whose rows were checked against the printed running balance. To total a kind of entry (e.g. pension), do not rely on one keyword: first call sum_statement_rows with the column and date range but no keywords to get every candidate row, classify each row yourself from its particulars (OCR spellings vary, e.g. "PEN", "Fension", "pensicn", "DA arrear", "DR ARREAR PAYMENT"; unlabelled credits are not counted), then call it again with rowRefs listing exactly the rows you chose and report that total. Consider related debits too (e.g. a recovery of excess pension) and say how you treated them. For any other figures (schedules, tables in text, ledger data) pass the itemised amounts to add_numbers. State the row count and the tool's total; list rows marked "check original" under **Missing information**. Where two documents cover the same period (e.g. a pension schedule and the bank credits), do not double count: say which source each period is taken from and reconcile the overlap.
+TOTALS MUST COME FROM THE TOOLS, never from your own arithmetic. Scanned statements carry a table "| # | Date | Ref | Particulars | Debit | Credit | Balance | Check |" whose rows were checked against the printed running balance. To total a kind of entry (e.g. pension), do not rely on one keyword: first call sum_statement_rows with the column and date range but no keywords to get every candidate row, classify each row yourself from its particulars (OCR spellings vary, e.g. "PEN", "Fension", "pensicn", "DA arrear", "DR ARREAR PAYMENT"; unlabelled credits are not counted), then call it again with rowRefs listing exactly the rows you chose and report that total. Interest ("Int.Pd"), NEFT/transfers from persons, cash deposits and other unlabelled credits are never pension. Do not drop a bank entry because another source covers that month: keep it in the bank total and explain the overlap. Under **Missing information** list EVERY row flagged "check original" with its date, amount and any balanceSuggestsAmount (the amount the running balance implies). Consider related debits too (e.g. a recovery of excess pension) and say how you treated them. For any other figures (schedules, tables in text, ledger data) pass the itemised amounts to add_numbers. State the row count and the tool's total; list rows marked "check original" under **Missing information**. Where two documents cover the same period (e.g. a pension schedule and the bank credits), do not double count: say which source each period is taken from and reconcile the overlap.
+STATEMENT FORMAT — use it whenever the user asks for a statement, schedule, month-wise or year-wise working, or a Word/PDF/report-ready answer (and for any pension, salary, rent or interest receipts question covering several years). Lay the answer out as a formal statement, in this order:
+1. "# Statement of <what> received" on the first line, then one line naming the person (with any PPO/account/reference number) and the period covered.
+2. "## Summary": a table | | Particulars | Period | Entries | Amount (₹) | with lettered rows (A, B, …): one row per source (e.g. A = pension as per drawn schedule, B = pension credits in bank A/c <no.>), then rows for related debits (e.g. C = Less: pension recovered by bank, listing the amounts) and the net (e.g. D = Net received (B − C)). There is NO "A + B" row: the sources overlap, so each keeps its own total and the overlap is explained in the paragraphs.
+3. Short paragraphs: the sources (document, bank, branch, account number, period each actually covers), what was counted and what was excluded, that bank rows were checked against the running balance, and how any overlapping month reconciles (with the amounts).
+4. "## Part A – Month-wise <...> as per <document> (<period>)": for figures in document text, a table | Sl. | Month | <component columns, e.g. Basic (₹), DA (₹)> | Total (₹) | Remarks | with every month, a bold "Total <year>" row after each year and a bold grand total; get every total from add_numbers.
+5. "## Part B – Month-wise <...> credited in bank (<period>)": call build_statement_tables with EVERY matching credit row from the first one in the statement (including credits for a month also shown in Part A) and the related debit rows, and place its [[Sx:monthly]] marker. Explain that months with no entry were paid in another month where that is so.
+6. "## Part C – List of all <...> entries in the bank statement": place the [[Sx:entries]] marker.
+7. "## Missing information".
+Number Parts only for the sources that exist. Write Indian digit grouping without "Rs." inside tables whose header says (₹).
 Quote them with the document name and page (e.g. "Sale deed, p. 4"). Passages "read by vision model" were transcribed from scanned pages or images and must be checked against the original.
 Return JSON: {"answer": string, "citations": [{"kind": "transaction"|"document"|"asset"|"legal_reference"|"ledger_entry", "id": number, "page"?: number}]} citing the records you relied on by id (for a document passage use its documentId and page).`,
       `CASE DATA:\n${JSON.stringify(context)}\n\nCONVERSATION:\n${convo}`,
@@ -140,7 +150,7 @@ Return JSON: {"answer": string, "citations": [{"kind": "transaction"|"document"|
       if (label && !citations.some((x) => x.kind === kind && x.id === Number(c.id) && x.label === label)) citations.push({ kind, id: Number(c.id), label });
       else if (!label) dropped++;
     }
-    let answer = out.answer?.trim() || "No answer was produced.";
+    let answer = expandStatementMarkers(out.answer?.trim() || "No answer was produced.", tables).replace(/\n{3,}/g, "\n\n");
     if (dropped > 0) answer += `\n\n_${dropped} citation(s) were removed because they did not match records in this case._`;
     const msg = await save(answer, citations, true);
     await audit(req, { caseId, caseTitle: ctx.c.title, action: "assistant.asked", entityType: "assistant_message", entityId: msg.id, summary: `Asked the AI assistant: ${parsed.data.message.slice(0, 120)}` });

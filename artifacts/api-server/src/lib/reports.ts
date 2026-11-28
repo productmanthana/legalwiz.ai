@@ -30,7 +30,8 @@ import { blindSpots, daCalculation, incomeExpenditure } from "./schedules";
 import { formatINR } from "./finance";
 
 type Cell = string | number | null;
-export type ReportTable = { columns: string[]; rows: Cell[][]; numeric?: number[] };
+/** display: exact text to show per cell in Word/PDF (as the user saw it); boldRows: total/subtotal rows. */
+export type ReportTable = { columns: string[]; rows: Cell[][]; numeric?: number[]; display?: string[][]; boldRows?: number[] };
 export type ReportSection = { heading: string; paragraphs?: string[]; table?: ReportTable };
 export type ReportModel = { title: string; subtitle: string; sections: ReportSection[] };
 
@@ -207,6 +208,21 @@ export async function buildReport(c: CaseRow, type: string, generatedBy: string)
 }
 
 const fmtCell = (v: Cell, isNum: boolean) => (v == null ? "" : isNum && typeof v === "number" ? formatINR(v) : String(v));
+const showCell = (t: ReportTable, r: number, c: number) => t.display?.[r]?.[c] ?? fmtCell(t.rows[r]![c] ?? null, !!t.numeric?.includes(c));
+/** Helvetica in pdfkit has no ₹ glyph. */
+const pdfText = (s: string) =>
+  s.replace(/\(₹\)/g, "(Rs.)").replace(/₹\s?/g, "Rs. ").replace(/[−–]/g, "-").replace(/✓/g, "OK").replace(/⚠/g, "!");
+/** Column width shares from content length (long text columns get more room). */
+function colShares(t: ReportTable): number[] {
+  const w = t.columns.map((c, i) => {
+    // 90th-percentile length, so one long total label does not widen the whole column.
+    const lens = t.rows.slice(0, 300).map((_, r) => showCell(t, r, i).length).sort((a, b) => a - b);
+    const typical = lens.length ? lens[Math.floor((lens.length - 1) * 0.9)]! : 0;
+    return Math.max(4, Math.min(40, Math.max(c.length * 0.8, typical)));
+  });
+  const sum = w.reduce((a, b) => a + b, 0);
+  return w.map((x) => x / sum);
+}
 
 export async function renderXlsx(m: ReportModel): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
@@ -217,7 +233,7 @@ export async function renderXlsx(m: ReportModel): Promise<Buffer> {
   cover.addRow([]);
   for (const s of m.sections) {
     if (s.table) continue;
-    cover.addRow([s.heading]).font = { bold: true };
+    if (s.heading) cover.addRow([s.heading]).font = { bold: true };
     for (const p of s.paragraphs ?? []) cover.addRow([p]);
     cover.addRow([]);
   }
@@ -234,11 +250,16 @@ export async function renderXlsx(m: ReportModel): Promise<Buffer> {
     header.eachCell((cell) => {
       cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE8EDF3" } };
     });
-    for (const r of s.table.rows) ws.addRow(r);
+    s.table.rows.forEach((r, ri) => {
+      const row = ws.addRow(r);
+      if (s.table!.boldRows?.includes(ri)) row.font = { bold: true };
+    });
     s.table.columns.forEach((col, i) => {
       const c = ws.getColumn(i + 1);
       c.width = Math.min(60, Math.max(12, col.length + 2));
-      if (s.table!.numeric?.includes(i)) c.numFmt = "#,##,##0.00";
+      if (!s.table!.numeric?.includes(i)) return;
+      const whole = !!s.table!.display && s.table!.rows.every((r) => typeof r[i] !== "number" || Number.isInteger(r[i]));
+      c.numFmt = whole ? "#,##,##0" : "#,##,##0.00";
     });
     ws.addRow([]);
     ws.addRow(["Not an official government form."]).font = { italic: true, size: 9 };
@@ -254,31 +275,36 @@ export function renderPdf(m: ReportModel): Promise<Buffer> {
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
     const width = doc.page.width - 72;
-    doc.font("Helvetica-Bold").fontSize(16).text(m.title);
-    doc.font("Helvetica").fontSize(9).fillColor("#555").text(m.subtitle).fillColor("#000");
+    doc.font("Helvetica-Bold").fontSize(16).text(pdfText(m.title), { align: "center" });
+    doc.font("Helvetica").fontSize(9).fillColor("#555").text(pdfText(m.subtitle), { align: "center" }).fillColor("#000");
     doc.moveDown();
     for (const s of m.sections) {
-      doc.font("Helvetica-Bold").fontSize(11).text(s.heading);
-      doc.moveDown(0.3);
-      for (const p of s.paragraphs ?? []) doc.font("Helvetica").fontSize(9).text(p.replace(/₹/g, "Rs."), { width });
+      if (s.heading) {
+        doc.font("Helvetica-Bold").fontSize(11).text(pdfText(s.heading));
+        doc.moveDown(0.3);
+      }
+      for (const p of s.paragraphs ?? []) doc.font("Helvetica").fontSize(9).text(pdfText(p), { width }).moveDown(0.2);
       if (s.table) {
-        const cols = s.table.columns.length;
-        const colW = width / cols;
-        const drawRow = (cells: string[], bold: boolean) => {
-          doc.font(bold ? "Helvetica-Bold" : "Helvetica").fontSize(7);
-          const h = Math.max(...cells.map((c) => doc.heightOfString(c, { width: colW - 4 }))) + 4;
+        const t = s.table;
+        const widths = colShares(t).map((s) => s * width);
+        const lefts = widths.map((_, i) => 36 + widths.slice(0, i).reduce((a, b) => a + b, 0));
+        const drawRow = (cells: string[], header: boolean, bold: boolean) => {
+          doc.font(header || bold ? "Helvetica-Bold" : "Helvetica").fontSize(7);
+          const h = Math.max(...cells.map((c, i) => doc.heightOfString(c, { width: widths[i]! - 4 }))) + 4;
           if (doc.y + h > doc.page.height - 48) doc.addPage();
           const y = doc.y;
+          if (header) doc.rect(36, y, width, h).fill("#e8edf3").fillColor("#000");
+          else if (bold) doc.rect(36, y, width, h).fill("#f5f7fa").fillColor("#000");
           cells.forEach((c, i) => {
-            const isNum = s.table!.numeric?.includes(i) && !bold;
-            doc.text(c, 36 + i * colW + 2, y + 2, { width: colW - 4, align: isNum ? "right" : "left" });
+            const isNum = t.numeric?.includes(i) && !header;
+            doc.text(c, lefts[i]! + 2, y + 2, { width: widths[i]! - 4, align: isNum ? "right" : "left" });
           });
           doc.moveTo(36, y + h).lineTo(36 + width, y + h).strokeColor("#ccc").lineWidth(0.5).stroke();
           doc.x = 36;
           doc.y = y + h;
         };
-        drawRow(s.table.columns, true);
-        for (const r of s.table.rows) drawRow(r.map((v, i) => fmtCell(v, !!s.table!.numeric?.includes(i))), false);
+        drawRow(t.columns.map(pdfText), true, true);
+        t.rows.forEach((r, ri) => drawRow(r.map((_, i) => pdfText(showCell(t, ri, i))), false, !!t.boldRows?.includes(ri)));
       }
       doc.moveDown();
     }
@@ -293,29 +319,36 @@ export function renderPdf(m: ReportModel): Promise<Buffer> {
 
 export async function renderDocx(m: ReportModel): Promise<Buffer> {
   const children: (Paragraph | Table)[] = [
-    new Paragraph({ text: m.title, heading: HeadingLevel.TITLE }),
-    new Paragraph({ children: [new TextRun({ text: m.subtitle, italics: true, size: 18 })] }),
+    new Paragraph({ text: m.title, heading: HeadingLevel.TITLE, alignment: AlignmentType.CENTER }),
+    ...m.subtitle.split("\n").map((line, i) => new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: line, italics: i > 0, bold: i === 0 && m.subtitle.includes("\n"), size: i === 0 ? 22 : 18 })] })),
   ];
   for (const s of m.sections) {
-    children.push(new Paragraph({ text: s.heading, heading: HeadingLevel.HEADING_2 }));
-    for (const p of s.paragraphs ?? []) for (const line of p.split("\n")) children.push(new Paragraph({ children: [new TextRun({ text: line, size: 20 })] }));
+    if (s.heading) children.push(new Paragraph({ text: s.heading, heading: HeadingLevel.HEADING_2 }));
+    for (const p of s.paragraphs ?? []) for (const line of p.split("\n")) children.push(new Paragraph({ spacing: { after: 80 }, children: [new TextRun({ text: line, size: 20 })] }));
     if (s.table) {
-      const mk = (cells: string[], bold: boolean) =>
+      const t = s.table;
+      const shares = colShares(t);
+      const mk = (cells: string[], header: boolean, bold: boolean) =>
         new TableRow({
-          tableHeader: bold,
+          tableHeader: header,
           children: cells.map(
             (c, i) =>
               new TableCell({
-                children: [new Paragraph({ alignment: !bold && s.table!.numeric?.includes(i) ? AlignmentType.RIGHT : AlignmentType.LEFT, children: [new TextRun({ text: c, bold, size: 16 })] })],
+                width: { size: Math.round(shares[i]! * 100), type: WidthType.PERCENTAGE },
+                shading: header ? { fill: "E8EDF3" } : bold ? { fill: "F5F7FA" } : undefined,
+                children: [new Paragraph({ alignment: !header && t.numeric?.includes(i) ? AlignmentType.RIGHT : AlignmentType.LEFT, children: [new TextRun({ text: c, bold: header || bold, size: 16 })] })],
               }),
           ),
         });
       children.push(
         new Table({
           width: { size: 100, type: WidthType.PERCENTAGE },
-          rows: [mk(s.table.columns, true), ...s.table.rows.map((r) => mk(r.map((v, i) => fmtCell(v, !!s.table!.numeric?.includes(i))), false))],
+          // Page text width ≈ 9,000 twips (A4/Letter with default margins).
+          columnWidths: shares.map((s) => Math.round(s * 9000)),
+          rows: [mk(t.columns, true, true), ...t.rows.map((r, ri) => mk(r.map((_, i) => showCell(t, ri, i)), false, !!t.boldRows?.includes(ri)))],
         }),
       );
+      children.push(new Paragraph({ text: "" }));
     }
   }
   const doc = new DocxDocument({ creator: "FINTRACE", title: m.title, sections: [{ children }] });

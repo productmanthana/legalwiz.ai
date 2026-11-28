@@ -5,14 +5,14 @@ type Message = { id: number; content: string; createdAt: Date; citations: { kind
 /** Strips inline Markdown so text reads cleanly in Excel/Word/PDF. */
 const plain = (s: string) =>
   s
-    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
     .replace(/__(.+?)__/g, "$1")
     .replace(/(^|\s)[*_](\S.*?\S|\S)[*_](?=\s|$|[.,;:])/g, "$1$2")
     .replace(/`([^`]+)`/g, "$1")
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
     .trim();
 
-const cells = (line: string) => line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => plain(c));
+const rawCells = (line: string) => line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|");
 
 /** "Rs. 1,25,000.50" → 125000.5; null when the cell is not an amount. */
 function amount(s: string): number | null {
@@ -20,44 +20,88 @@ function amount(s: string): number | null {
   return /^-?\d+(\.\d+)?$/.test(t) ? Number(t) : null;
 }
 
-/** Converts an assistant answer (Markdown) into the report model the exporters render. */
+/** Total / subtotal rows: a bold cell, or a label starting with Total / Grand total / Net. */
+const isTotalRow = (raw: string[]) => raw.some((c) => /\*\*\S/.test(c)) || /^(sub-?total|total|grand total|net)\b/i.test(plain(raw.find((c) => plain(c)) ?? ""));
+
+/**
+ * Converts an assistant answer (Markdown) into the report model the exporters render.
+ * An answer in statement format (first line "# Title", then a subject line) keeps that title
+ * and subject at the top, with the sections and tables in the order the answer gives them.
+ */
 export function answerReport(caseTitle: string, question: string, m: Message, by: string): ReportModel {
-  const sections: ReportSection[] = [{ heading: "Question", paragraphs: [question || "—"] }];
+  const answered = `Answered ${m.createdAt.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} · exported by ${by}`;
+  const lines = m.content.split("\n");
+  let title = `AI Assistant answer — ${caseTitle}`;
+  let subtitle = answered;
+  let start = 0;
+  const first = lines.findIndex((l) => l.trim());
+  const statement = first >= 0 && /^#\s+\S/.test(lines[first]!);
+  if (statement) {
+    title = plain(lines[first]!.replace(/^#\s+/, ""));
+    start = first + 1;
+    const sub = lines.findIndex((l, i) => i >= start && l.trim());
+    if (sub >= 0 && !/^\s*(#|\|)/.test(lines[sub]!)) {
+      subtitle = `${plain(lines[sub]!)}\n${answered}`;
+      start = sub + 1;
+    }
+  }
+
+  const sections: ReportSection[] = statement ? [] : [{ heading: "Question", paragraphs: [question || "—"] }];
   const missing: string[] = [];
-  let heading = "Answer";
+  let heading = statement ? "" : "Answer";
+  let used = false; // heading already printed for the current section
   let paras: string[] = [];
   let inMissing = false;
   let tables = 0;
+  const nextHeading = () => {
+    const h = used ? "" : heading;
+    used = true;
+    return h;
+  };
   const flush = () => {
-    if (paras.length) sections.push({ heading, paragraphs: paras });
+    if (paras.length) sections.push({ heading: nextHeading(), paragraphs: paras });
     paras = [];
   };
 
-  const lines = m.content.split("\n");
-  for (let i = 0; i < lines.length; i++) {
+  for (let i = start; i < lines.length; i++) {
     const line = lines[i]!;
     if (/^\s*\|/.test(line)) {
       // Markdown table: header, separator, then rows.
       const block: string[] = [];
       while (i < lines.length && /^\s*\|/.test(lines[i]!)) block.push(lines[i++]!);
       i--;
-      const rows = block.filter((l) => !/^\s*\|?\s*:?-{2,}/.test(l)).map(cells);
-      if (rows.length < 1) continue;
-      const columns = rows[0]!;
-      const body = rows.slice(1);
-      const numeric = columns.map((_, c) => c).filter((c) => body.length > 0 && body.filter((r) => r[c] && amount(r[c]!) !== null).length >= Math.ceil(body.filter((r) => r[c]).length * 0.8) && body.some((r) => r[c]));
-      flush();
+      const raw = block.filter((l) => !/^\s*\|?\s*:?-{2,}/.test(l)).map(rawCells);
+      if (raw.length < 1) continue;
+      const columns = raw[0]!.map(plain);
+      const bodyRaw = raw.slice(1);
+      const body = bodyRaw.map((r) => columns.map((_, c) => plain(r[c] ?? "")));
+      const numeric = columns
+        .map((_, c) => c)
+        .filter((c) => {
+          const filled = body.filter((r) => r[c]);
+          return filled.length > 0 && filled.filter((r) => amount(r[c]!) !== null).length >= Math.ceil(filled.length * 0.8);
+        });
       tables++;
+      const h = heading === "Answer" && !used ? `Table ${tables}` : nextHeading();
       sections.push({
-        heading: heading === "Answer" ? `Table ${tables}` : heading,
-        table: { columns, rows: body.map((r) => columns.map((_, c) => (numeric.includes(c) ? amount(r[c] ?? "") ?? (r[c] || null) : r[c] || null))), numeric },
+        heading: h,
+        paragraphs: paras.length ? paras : undefined,
+        table: {
+          columns,
+          rows: body.map((r) => r.map((v, c) => (numeric.includes(c) ? amount(v) ?? (v || null) : v || null))),
+          numeric,
+          display: body,
+          boldRows: bodyRaw.map((r, ri) => (isTotalRow(r) ? ri : -1)).filter((ri) => ri >= 0),
+        },
       });
+      paras = [];
       continue;
     }
-    const h = line.match(/^#{1,6}\s+(.*)/);
-    if (h) {
+    const hm = line.match(/^#{1,6}\s+(.*)/);
+    if (hm) {
       flush();
-      heading = plain(h[1]!);
+      heading = plain(hm[1]!);
+      used = false;
       inMissing = /missing information/i.test(heading);
       continue;
     }
@@ -71,8 +115,9 @@ export function answerReport(caseTitle: string, question: string, m: Message, by
   }
   flush();
   sections.push({ heading: "Missing information", paragraphs: missing.filter(Boolean).length ? missing.filter(Boolean) : ["None identified in this answer."] });
+  if (statement) sections.push({ heading: "Request", paragraphs: [question || "—"] });
   if (m.citations.length) sections.push({ heading: "Sources", table: { columns: ["Type", "Record #", "Reference"], rows: m.citations.map((c) => [c.kind.replace(/_/g, " "), c.id, c.label]) } });
   sections.push({ heading: "Note", paragraphs: ["This answer is an AI suggestion. Verify every figure against the source documents before relying on it.", DISCLAIMER] });
 
-  return { title: `AI Assistant answer — ${caseTitle}`, subtitle: `Answered ${m.createdAt.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} · exported by ${by}`, sections };
+  return { title, subtitle, sections };
 }

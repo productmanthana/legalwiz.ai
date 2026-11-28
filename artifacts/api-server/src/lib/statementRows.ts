@@ -165,7 +165,8 @@ export function renderRows(rows: TxnRow[], startNo: number): string {
   return `[Transaction rows — read by vision model and checked against the running balance]\n${TABLE_HEADER}\n|---|---|---|---|---|---|---|---|\n${lines.join("\n")}\n\n${note}`;
 }
 
-export type StoredRow = TxnRow & { documentId: number; documentName: string; page: number; no: number; isoDate: string | null };
+/** suggested: amount the running balance implies for a flagged row (when the next row's amount is right). */
+export type StoredRow = TxnRow & { documentId: number; documentName: string; page: number; no: number; isoDate: string | null; suggested?: number };
 
 /** Reads the rows back out of page text written by renderRows. */
 export function parseStoredRows(pages: { documentId: number; documentName: string; pageNumber: number; content: string }[]): StoredRow[] {
@@ -193,6 +194,24 @@ export function parseStoredRows(pages: { documentId: number; documentName: strin
         kind: "txn",
         check: LABEL_CHECK.get(c[7]!) ?? "unchecked",
       });
+    }
+  }
+  // A mismatch can come from a misread amount AND balance on the row before (both agree with each
+  // other, so that row passed); the mismatch only surfaces on the next row. Flag both rows.
+  for (let i = out.length - 1; i > 0; i--) {
+    const r = out[i]!;
+    const prev = out[i - 1]!;
+    if (r.check === "review" && prev.documentId === r.documentId && prev.no === r.no - 1 && (prev.check === "ok" || prev.check === "corrected")) {
+      prev.check = "review";
+      // If this row's amount is right, the balance before it fixes the previous row's amount.
+      const before = out[i - 2];
+      if (r.balance != null && before?.balance != null && before.documentId === r.documentId && before.no === r.no - 2) {
+        const implied = round2(r.balance - (r.credit ?? 0) + (r.debit ?? 0) - before.balance);
+        // Skip implausible values (more than 10× the read amount): then the next row is the misread one.
+        const amt = prev.credit ?? prev.debit ?? 0;
+        const v = prev.credit != null ? implied : -implied;
+        if (v > 0 && v <= amt * 10 && !near(v, amt)) prev.suggested = v;
+      }
     }
   }
   return out;
@@ -230,6 +249,6 @@ export function sumRows(rows: StoredRow[], q: RowQuery) {
     matchedRows: matched.length,
     total,
     rowsNeedingReview: reviewCount(matched),
-    rows: matched.slice(0, 1000).map((r) => ({ ref: `${r.documentId}:${r.no}`, page: r.page, date: r.date, particulars: r.particulars, amount: r[q.column], check: r.check })),
+    rows: matched.slice(0, 1000).map((r) => ({ ref: `${r.documentId}:${r.no}`, page: r.page, date: r.date, particulars: r.particulars, amount: r[q.column], check: r.check, ...(r.suggested ? { balanceSuggestsAmount: r.suggested } : {}) })),
   };
 }
