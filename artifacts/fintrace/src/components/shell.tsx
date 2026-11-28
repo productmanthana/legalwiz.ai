@@ -35,7 +35,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     { href: "/documents", label: "Documents", icon: FileText },
     { href: "/assistant", label: "AI Assistant", icon: Bot },
     { href: "/legal", label: inv ? "Legal References" : "Legal Intelligence", icon: Scale },
-    { href: "/audit", label: inv ? "Review History" : "Audit History", icon: History },
+    ...(me?.canViewAudit ? [{ href: "/audit", label: inv ? "Review History" : "Audit History", icon: History }] : []),
     { href: "/settings", label: "Settings", icon: Settings },
   ];
   const isActive = (href: string) => {

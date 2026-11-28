@@ -9,5 +9,21 @@
 export type ListAuditLogsParams = {
 caseId?: number;
 action?: string;
+/**
+ * Name or email contains
+ */
+user?: string;
+/**
+ * Case title contains
+ */
+caseTitle?: string;
+/**
+ * On or after this date (YYYY-MM-DD)
+ */
+from?: string;
+/**
+ * On or before this date (YYYY-MM-DD)
+ */
+to?: string;
 limit?: number;
 };

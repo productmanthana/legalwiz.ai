@@ -35,6 +35,7 @@ export const SignUpResponse = zod.object({
   "displayName": zod.string(),
   "workspace": zod.enum(['client', 'investigation']).describe('client = accused/advocate/CA workspace; investigation = authorised officer workspace'),
   "role": zod.enum(['individual', 'advocate', 'chartered_accountant', 'investigation_officer', 'admin']),
+  "canViewAudit": zod.boolean().optional().describe('True for the audit administrator, who sees every user\'s audit history'),
   "organisation": zod.string().nullish(),
   "onboarded": zod.boolean()
 })
@@ -51,6 +52,7 @@ export const SignInResponse = zod.object({
   "displayName": zod.string(),
   "workspace": zod.enum(['client', 'investigation']).describe('client = accused/advocate/CA workspace; investigation = authorised officer workspace'),
   "role": zod.enum(['individual', 'advocate', 'chartered_accountant', 'investigation_officer', 'admin']),
+  "canViewAudit": zod.boolean().optional().describe('True for the audit administrator, who sees every user\'s audit history'),
   "organisation": zod.string().nullish(),
   "onboarded": zod.boolean()
 })
@@ -65,6 +67,7 @@ export const GetMeResponse = zod.object({
   "displayName": zod.string(),
   "workspace": zod.enum(['client', 'investigation']).describe('client = accused/advocate/CA workspace; investigation = authorised officer workspace'),
   "role": zod.enum(['individual', 'advocate', 'chartered_accountant', 'investigation_officer', 'admin']),
+  "canViewAudit": zod.boolean().optional().describe('True for the audit administrator, who sees every user\'s audit history'),
   "organisation": zod.string().nullish(),
   "onboarded": zod.boolean()
 })
@@ -83,6 +86,7 @@ export const UpdateMeResponse = zod.object({
   "displayName": zod.string(),
   "workspace": zod.enum(['client', 'investigation']).describe('client = accused/advocate/CA workspace; investigation = authorised officer workspace'),
   "role": zod.enum(['individual', 'advocate', 'chartered_accountant', 'investigation_officer', 'admin']),
+  "canViewAudit": zod.boolean().optional().describe('True for the audit administrator, who sees every user\'s audit history'),
   "organisation": zod.string().nullish(),
   "onboarded": zod.boolean()
 })
@@ -182,6 +186,7 @@ export const GetRecentActivityResponseItem = zod.object({
   "caseId": zod.int().nullish(),
   "caseTitle": zod.string().nullish(),
   "userName": zod.string().nullish(),
+  "userEmail": zod.string().nullish(),
   "action": zod.string(),
   "entityType": zod.string(),
   "entityId": zod.int().nullish(),
@@ -779,6 +784,7 @@ export const GetTransactionResponse = zod.object({
   "caseId": zod.int().nullish(),
   "caseTitle": zod.string().nullish(),
   "userName": zod.string().nullish(),
+  "userEmail": zod.string().nullish(),
   "action": zod.string(),
   "entityType": zod.string(),
   "entityId": zod.int().nullish(),
@@ -2033,6 +2039,7 @@ export const GetQueryResponse = zod.object({
   "caseId": zod.int().nullish(),
   "caseTitle": zod.string().nullish(),
   "userName": zod.string().nullish(),
+  "userEmail": zod.string().nullish(),
   "action": zod.string(),
   "entityType": zod.string(),
   "entityId": zod.int().nullish(),
@@ -2724,6 +2731,10 @@ export const ExportReportResponse = zod.unknown()
 export const ListAuditLogsQueryParams = zod.object({
   "caseId": zod.coerce.number().int().optional(),
   "action": zod.coerce.string().optional(),
+  "user": zod.coerce.string().optional().describe('Name or email contains'),
+  "caseTitle": zod.coerce.string().optional().describe('Case title contains'),
+  "from": zod.coerce.string().optional().describe('On or after this date (YYYY-MM-DD)'),
+  "to": zod.coerce.string().optional().describe('On or before this date (YYYY-MM-DD)'),
   "limit": zod.coerce.number().int().optional()
 })
 
@@ -2732,6 +2743,7 @@ export const ListAuditLogsResponseItem = zod.object({
   "caseId": zod.int().nullish(),
   "caseTitle": zod.string().nullish(),
   "userName": zod.string().nullish(),
+  "userEmail": zod.string().nullish(),
   "action": zod.string(),
   "entityType": zod.string(),
   "entityId": zod.int().nullish(),

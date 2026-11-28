@@ -15,6 +15,8 @@ export interface UserProfile {
   /** client = accused/advocate/CA workspace; investigation = authorised officer workspace */
   workspace: UserProfileWorkspace;
   role: UserProfileRole;
+  /** True for the audit administrator, who sees every user's audit history */
+  canViewAudit?: boolean;
   /** @nullable */
   organisation?: string | null;
   onboarded: boolean;

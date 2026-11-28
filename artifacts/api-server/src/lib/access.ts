@@ -14,6 +14,12 @@ declare global {
   }
 }
 
+/** The only account allowed to view the full, all-user audit history. */
+const AUDIT_ADMIN_EMAIL = "drsampathkumarpatil@gmail.com";
+export function isAuditAdmin(user: { email: string }): boolean {
+  return user.email.trim().toLowerCase() === AUDIT_ADMIN_EMAIL;
+}
+
 export function currentUser(req: Request): User {
   if (!req.appUser) throw new Error("requireUser middleware not mounted");
   return req.appUser;

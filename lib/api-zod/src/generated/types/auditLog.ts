@@ -14,6 +14,8 @@ export interface AuditLog {
   caseTitle?: string | null;
   /** @nullable */
   userName?: string | null;
+  /** @nullable */
+  userEmail?: string | null;
   action: string;
   entityType: string;
   /** @nullable */

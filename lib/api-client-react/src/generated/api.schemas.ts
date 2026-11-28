@@ -62,6 +62,8 @@ export interface UserProfile {
   /** client = accused/advocate/CA workspace; investigation = authorised officer workspace */
   workspace: UserProfileWorkspace;
   role: UserProfileRole;
+  /** True for the audit administrator, who sees every user's audit history */
+  canViewAudit?: boolean;
   /** @nullable */
   organisation?: string | null;
   onboarded: boolean;
@@ -806,6 +808,8 @@ export interface AuditLog {
   caseTitle?: string | null;
   /** @nullable */
   userName?: string | null;
+  /** @nullable */
+  userEmail?: string | null;
   action: string;
   entityType: string;
   /** @nullable */
@@ -2280,6 +2284,22 @@ export const ExportReportFormat = {
 export type ListAuditLogsParams = {
 caseId?: number;
 action?: string;
+/**
+ * Name or email contains
+ */
+user?: string;
+/**
+ * Case title contains
+ */
+caseTitle?: string;
+/**
+ * On or after this date (YYYY-MM-DD)
+ */
+from?: string;
+/**
+ * On or before this date (YYYY-MM-DD)
+ */
+to?: string;
 limit?: number;
 };
 

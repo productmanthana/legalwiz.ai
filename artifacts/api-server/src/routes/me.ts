@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
 import { db, usersTable } from "@workspace/db";
 import { UpdateMeBody } from "@workspace/api-zod";
-import { currentUser } from "../lib/access";
+import { currentUser, isAuditAdmin } from "../lib/access";
 import { audit, diff } from "../lib/audit";
 import { aiConfigured } from "../lib/ai";
 import { seedDemoCase } from "../lib/demo";
@@ -18,6 +18,7 @@ export function serializeUser(u: typeof usersTable.$inferSelect) {
     role: u.role,
     organisation: u.organisation,
     onboarded: u.onboarded,
+    canViewAudit: isAuditAdmin(u),
   };
 }
 

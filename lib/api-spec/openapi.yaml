@@ -1257,8 +1257,14 @@ paths:
       parameters:
         - { name: caseId, in: query, schema: { type: integer } }
         - { name: action, in: query, schema: { type: string } }
+        - { name: user, in: query, description: "Name or email contains", schema: { type: string } }
+        - { name: caseTitle, in: query, description: "Case title contains", schema: { type: string } }
+        - { name: from, in: query, description: "On or after this date (YYYY-MM-DD)", schema: { type: string } }
+        - { name: to, in: query, description: "On or before this date (YYYY-MM-DD)", schema: { type: string } }
         - { name: limit, in: query, schema: { type: integer } }
       responses:
+        "403":
+          description: Only the audit administrator can view the full audit history
         "200":
           description: Audit trail (append-only)
           content:
@@ -1352,6 +1358,7 @@ components:
         role:
           type: string
           enum: [individual, advocate, chartered_accountant, investigation_officer, admin]
+        canViewAudit: { type: boolean, description: "True for the audit administrator, who sees every user's audit history" }
         organisation: { type: ["string", "null"] }
         onboarded: { type: boolean }
     SignUpBody:
@@ -2379,6 +2386,7 @@ components:
         caseId: { type: ["integer", "null"] }
         caseTitle: { type: ["string", "null"] }
         userName: { type: ["string", "null"] }
+        userEmail: { type: ["string", "null"] }
         action: { type: string }
         entityType: { type: string }
         entityId: { type: ["integer", "null"] }

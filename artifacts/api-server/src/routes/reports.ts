@@ -1,8 +1,8 @@
 import { Router, type IRouter } from "express";
-import { and, desc, eq, type SQL } from "drizzle-orm";
-import { db, generatedReportsTable, auditLogsTable } from "@workspace/db";
+import { and, desc, eq, gte, ilike, lt, or, type SQL } from "drizzle-orm";
+import { db, generatedReportsTable, auditLogsTable, usersTable } from "@workspace/db";
 import { ExportReportQueryParams, ListAuditLogsQueryParams } from "@workspace/api-zod";
-import { accessibleCases, currentUser, intParam, loadCase } from "../lib/access";
+import { currentUser, intParam, isAuditAdmin, loadCase } from "../lib/access";
 import { audit } from "../lib/audit";
 import { REPORT_TYPES, buildReport, renderDocx, renderPdf, renderXlsx } from "../lib/reports";
 
@@ -53,35 +53,27 @@ router.get("/audit-logs", async (req, res): Promise<void> => {
     res.status(400).json({ error: q.error.message });
     return;
   }
-  const user = currentUser(req);
-  const conds: SQL[] = [];
-  if (q.data.caseId) {
-    const ctx = await loadCase(req, res, q.data.caseId);
-    if (!ctx) return;
-    conds.push(eq(auditLogsTable.caseId, ctx.c.id));
-  } else {
-    const ids = (await accessibleCases(user)).map((c) => c.c.id);
-    // Own actions (incl. deleted cases and library edits) plus everything on accessible cases.
-    const rows = await db
-      .select()
-      .from(auditLogsTable)
-      .where(q.data.action ? eq(auditLogsTable.action, q.data.action) : undefined)
-      .orderBy(desc(auditLogsTable.createdAt))
-      .limit(5000);
-    const allowed = new Set(ids);
-    const visible = rows.filter((r) => r.userId === user.id || (r.caseId != null && allowed.has(r.caseId)));
-    res.json(visible.slice(0, Math.min(q.data.limit ?? 200, 1000)).map(({ userId: _u, ...r }) => r));
+  if (!isAuditAdmin(currentUser(req))) {
+    res.status(403).json({ error: "Only the audit administrator can view the audit history" });
     return;
   }
-  if (q.data.action) conds.push(eq(auditLogsTable.action, q.data.action));
+  const f = q.data;
+  const like = (v: string) => `%${v.trim()}%`;
+  const conds: SQL[] = [];
+  if (f.caseId) conds.push(eq(auditLogsTable.caseId, f.caseId));
+  if (f.action?.trim()) conds.push(ilike(auditLogsTable.action, like(f.action)));
+  if (f.user?.trim()) conds.push(or(ilike(auditLogsTable.userName, like(f.user)), ilike(usersTable.email, like(f.user)))!);
+  if (f.caseTitle?.trim()) conds.push(ilike(auditLogsTable.caseTitle, like(f.caseTitle)));
+  if (f.from) conds.push(gte(auditLogsTable.createdAt, new Date(`${f.from}T00:00:00+05:30`)));
+  if (f.to) conds.push(lt(auditLogsTable.createdAt, new Date(new Date(`${f.to}T00:00:00+05:30`).getTime() + 86_400_000)));
   const rows = await db
-    .select()
+    .select({ log: auditLogsTable, userEmail: usersTable.email })
     .from(auditLogsTable)
+    .leftJoin(usersTable, eq(usersTable.id, auditLogsTable.userId))
     .where(and(...conds))
     .orderBy(desc(auditLogsTable.createdAt))
-    .limit(Math.min(q.data.limit ?? 200, 1000));
-  res.json(rows.map(({ userId: _u, ...r }) => r));
+    .limit(Math.min(f.limit ?? 300, 2000));
+  res.json(rows.map(({ log: { userId: _u, ...r }, userEmail }) => ({ ...r, userEmail })));
 });
-
 
 export default router;
