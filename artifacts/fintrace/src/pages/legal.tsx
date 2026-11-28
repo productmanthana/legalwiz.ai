@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { PageHeader, LoadingRows, ErrorState, EmptyState, Panel, useInvalidate, Notice, nativeSelect, Field } from "@/components/common";
 import { EntityFormDialog, type FieldDef } from "@/components/entity-form";
 import { LegalCard } from "@/components/legal-card";
+import { LegalOnlineResults } from "@/components/legal-online-results";
 import { LEGAL_CATEGORIES, human, errMsg, opts } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
 
@@ -57,6 +58,7 @@ export default function Legal() {
           </>} />
         ))}</div>
       )}
+      <LegalOnlineResults query={s} onAdded={refresh} />
       <EntityFormDialog open={form.open} onOpenChange={(o) => setForm({ open: o, edit: form.edit })} title={form.edit ? "Edit reference" : "Add legal reference"} wide fields={FIELDS}
         description="New references start as unverified."
         initial={form.edit ? { ...(form.edit as unknown as Record<string, unknown>), categories: form.edit.categories.join(", ") } : { sourceType: "judgment", bindingStatus: "not_assessed" }} pending={cr.isPending || up.isPending}

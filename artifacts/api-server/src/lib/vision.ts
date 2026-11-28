@@ -5,7 +5,7 @@ import OpenAI from "openai";
  * Uses the platform OpenAI integration when provisioned, else OPENAI_API_KEY.
  */
 let client: OpenAI | null | undefined;
-function getClient(): OpenAI | null {
+export function getClient(): OpenAI | null {
   if (client === undefined) {
     if (process.env.AI_INTEGRATIONS_OPENAI_API_KEY && process.env.AI_INTEGRATIONS_OPENAI_BASE_URL) {
       client = new OpenAI({ apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY, baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL });

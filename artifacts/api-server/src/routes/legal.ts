@@ -10,6 +10,7 @@ import {
 } from "@workspace/api-zod";
 import { currentUser, intParam, loadCase } from "../lib/access";
 import { audit, diff } from "../lib/audit";
+import { searchJudgmentsOnline } from "../lib/onlineJudgments";
 
 const router: IRouter = Router();
 
@@ -48,6 +49,21 @@ router.get("/legal-references", async (req, res): Promise<void> => {
     rows.sort((a, b) => score(b) - score(a));
   }
   res.json(rows);
+});
+
+// Live web search for judgments (newest first). Results are unverified research leads.
+router.get("/legal-online-search", async (req, res): Promise<void> => {
+  const q = String(req.query["q"] ?? "").trim();
+  if (q.length < 3) {
+    res.status(400).json({ error: "Enter at least 3 characters" });
+    return;
+  }
+  try {
+    res.json({ results: await searchJudgmentsOnline(q) });
+  } catch (e) {
+    req.log?.error({ err: e }, "Online judgment search failed");
+    res.status(502).json({ error: "Online search is unavailable right now. Try again shortly." });
+  }
 });
 
 const STOP_WORDS = new Set(["case", "cases", "the", "and", "for", "with", "law", "judgment", "judgments", "vs", "versus"]);
