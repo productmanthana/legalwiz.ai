@@ -1,7 +1,7 @@
 import type { AiTool } from "./ai";
 import type { PagePassage } from "./assistantContext";
 import { round2 } from "./finance";
-import { parseStoredRows, searchRows, sumRows, type RowQuery, type SearchQuery } from "./statementRows";
+import { fuzzyNameMatch, parseStoredRows, searchRows, sumRows, type RowQuery, type SearchQuery } from "./statementRows";
 import { buildStatementTables, type StatementTables } from "./statementTables";
 
 const strList = { type: "array", items: { type: "string" } };
@@ -21,7 +21,7 @@ export function assistantTools(passages: PagePassage[], ledger: LedgerTxn[] = []
       description:
         `Finds EVERY transaction, debits and credits together, in all uploaded statements (${rows.length} rows) and the case ledger (${ledger.length} transactions), across all years. ` +
         "Use it for questions about a person, party or account (e.g. every transaction with \"Jayappa\" — a 2022 debit and a 2025 credit are both returned), or about a particular day (onDate) or period. " +
-        "A row matches when its particulars contain ANY includeAny keyword (case-insensitive; pass name spelling variants and parts, e.g. [\"jayappa\", \"jayapa\", \"jaiappa\"]; empty = all rows), NO excludeAny keyword, and its date is in range. " +
+        "A row matches when its particulars match ANY includeAny keyword, tolerating OCR misreads and cut-off names (pass each name and its distinctive parts separately, e.g. for \"Sri Kalaveerabhadreshwara Traders\" pass [\"kalaveerabhadreshwara\", \"kalaveera\", \"bhadreshwara\", \"traders\"]; empty = all rows), NO excludeAny keyword, and its date is in range. " +
         "Returns statement rows with documentId and page (for citing the page), totals by year, total debit, total credit and net, plus matching ledger transactions.",
       parameters: {
         type: "object",
@@ -35,14 +35,13 @@ export function assistantTools(passages: PagePassage[], ledger: LedgerTxn[] = []
       },
       run: (args) => {
         const q = args as SearchQuery;
-        const inc = (q.includeAny ?? []).map((s) => s.toLowerCase()).filter(Boolean);
+        const inc = (q.includeAny ?? []).filter((s) => s.trim());
         const exc = (q.excludeAny ?? []).map((s) => s.toLowerCase()).filter(Boolean);
         const from = q.onDate || q.fromDate;
         const to = q.onDate || q.toDate;
         const led = ledger.filter((t) => {
-          const hay = t.description.toLowerCase();
-          if (inc.length && !inc.some((k) => hay.includes(k))) return false;
-          if (exc.some((k) => hay.includes(k))) return false;
+          if (inc.length && !inc.some((k) => fuzzyNameMatch(t.description, k))) return false;
+          if (exc.some((k) => t.description.toLowerCase().includes(k))) return false;
           if (from && t.txnDate < from) return false;
           if (to && t.txnDate > to) return false;
           return true;

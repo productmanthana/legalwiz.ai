@@ -219,19 +219,58 @@ export function parseStoredRows(pages: { documentId: number; documentName: strin
 
 export type SearchQuery = { includeAny?: string[]; excludeAny?: string[]; onDate?: string; fromDate?: string; toDate?: string };
 
+function editDistance(a: string, b: string): number {
+  const d = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    let prev = d[0]!;
+    d[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const tmp = d[j]!;
+      d[j] = Math.min(d[j]! + 1, d[j - 1]! + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = tmp;
+    }
+  }
+  return d[b.length]!;
+}
+
+/**
+ * Name match that tolerates OCR misreads and truncated narrations: the keyword appears in the
+ * text, or a word of the text (5+ letters) is part of the keyword (e.g. "BHADRE" in
+ * "kalaveerabhadreshwara"), or is within a small edit distance of it.
+ */
+export function fuzzyNameMatch(text: string, keyword: string): boolean {
+  const k = keyword.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (!k) return false;
+  const t = text.toLowerCase();
+  if (t.includes(keyword.toLowerCase())) return true;
+  for (const w of t.split(/[^a-z0-9]+/)) {
+    if (w.length < 5 || /^\d+$/.test(w)) continue;
+    if (k.includes(w)) return true;
+    if (k.length >= 5 && w.includes(k)) return true;
+    const n = Math.min(w.length, k.length);
+    if (n >= 6 && editDistance(w.slice(0, n), k.slice(0, n)) <= Math.floor(n / 4)) return true;
+  }
+  return false;
+}
+
+/** Narrations that carry no party name (cheque clearing, IMPS/UPI codes, bare numbers). */
+const UNNAMED = /^(by\s+inst|ey\s+inst|.*micr|imps|upi|\d[\d/ -]*$|by\s+clg|clg|by\s+chq|chq)/i;
+
+const monthsBetween = (a: string, b: string) => (Number(b.slice(0, 4)) - Number(a.slice(0, 4))) * 12 + Number(b.slice(5, 7)) - Number(a.slice(5, 7));
+
 /** Every debit AND credit row matching names/keywords and dates, across all years, with per-year totals. */
 export function searchRows(rows: StoredRow[], q: SearchQuery) {
-  const inc = (q.includeAny ?? []).map((s) => s.toLowerCase()).filter(Boolean);
+  const inc = (q.includeAny ?? []).filter((s) => s.trim());
   const exc = (q.excludeAny ?? []).map((s) => s.toLowerCase()).filter(Boolean);
   const from = q.onDate || q.fromDate;
   const to = q.onDate || q.toDate;
+  const inRange = (r: StoredRow) => !(from && (!r.isoDate || r.isoDate < from)) && !(to && (!r.isoDate || r.isoDate > to));
+  const isTxn = (r: StoredRow) => r.kind === "txn" && !!(r.debit || r.credit);
   const matched = rows.filter((r) => {
-    if (r.kind !== "txn" || (!r.debit && !r.credit)) return false;
-    const hay = `${r.particulars} ${r.ref}`.toLowerCase();
-    if (inc.length && !inc.some((k) => hay.includes(k))) return false;
-    if (exc.some((k) => hay.includes(k))) return false;
-    if (from && (!r.isoDate || r.isoDate < from)) return false;
-    if (to && (!r.isoDate || r.isoDate > to)) return false;
+    if (!isTxn(r) || !inRange(r)) return false;
+    const hay = `${r.particulars} ${r.ref}`;
+    if (inc.length && !inc.some((k) => fuzzyNameMatch(hay, k))) return false;
+    if (exc.some((k) => hay.toLowerCase().includes(k))) return false;
     return true;
   }).sort((a, b) => (a.isoDate ?? "").localeCompare(b.isoDate ?? ""));
   const byYear = new Map<string, { year: string; count: number; debit: number; credit: number }>();
@@ -241,8 +280,21 @@ export function searchRows(rows: StoredRow[], q: SearchQuery) {
     e.count++; e.debit = round2(e.debit + (r.debit ?? 0)); e.credit = round2(e.credit + (r.credit ?? 0));
     byYear.set(y, e);
   }
+  // For a name search: entries with no name in the narration, near the named ones in time and of
+  // similar size — the statement cannot say who paid them, but they may be the same party.
+  const related: StoredRow[] = [];
+  if (inc.length && matched.length) {
+    const keys = new Set(matched.map((r) => `${r.documentId}:${r.no}`));
+    for (const r of rows) {
+      if (!isTxn(r) || !r.isoDate || keys.has(`${r.documentId}:${r.no}`) || !UNNAMED.test(r.particulars.trim())) continue;
+      const near = matched.filter((m) => m.isoDate && Math.abs(monthsBetween(m.isoDate, r.isoDate!)) <= 12);
+      const col = r.credit ? "credit" : "debit";
+      if (near.some((m) => m[col] && Math.abs(m[col]! - r[col]!) <= m[col]! * 0.3)) related.push(r);
+    }
+  }
   const debit = round2(matched.reduce((s, r) => s + (r.debit ?? 0), 0));
   const credit = round2(matched.reduce((s, r) => s + (r.credit ?? 0), 0));
+  const view = (r: StoredRow) => ({ ref: `${r.documentId}:${r.no}`, documentId: r.documentId, document: r.documentName, page: r.page, date: r.date, particulars: r.particulars, debit: r.debit, credit: r.credit, balance: r.balance, check: r.check });
   return {
     matchedRows: matched.length,
     totalDebit: debit,
@@ -250,7 +302,14 @@ export function searchRows(rows: StoredRow[], q: SearchQuery) {
     netCreditMinusDebit: round2(credit - debit),
     byYear: [...byYear.values()],
     rowsNeedingReview: reviewCount(matched),
-    rows: matched.slice(0, 1000).map((r) => ({ ref: `${r.documentId}:${r.no}`, documentId: r.documentId, document: r.documentName, page: r.page, date: r.date, particulars: r.particulars, debit: r.debit, credit: r.credit, balance: r.balance, check: r.check })),
+    rows: matched.slice(0, 1000).map(view),
+    possiblyRelatedUnnamed: {
+      count: related.length,
+      totalDebit: round2(related.reduce((s, r) => s + (r.debit ?? 0), 0)),
+      totalCredit: round2(related.reduce((s, r) => s + (r.credit ?? 0), 0)),
+      note: "These narrations carry no party name (cheque clearing, IMPS/UPI). They fall within 12 months of a named entry and are of similar amount, so they MAY be from the same party. The statement cannot confirm the payer: list them separately and never add them to the named total.",
+      rows: related.slice(0, 300).map(view),
+    },
   };
 }
 
