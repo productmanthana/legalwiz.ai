@@ -25,22 +25,37 @@ router.get("/legal-references", async (req, res): Promise<void> => {
   if (f.court) conds.push(ilike(legalReferencesTable.court, `%${f.court}%`));
   if (f.verificationStatus) conds.push(eq(legalReferencesTable.verificationStatus, f.verificationStatus));
   if (f.category) conds.push(sql`${legalReferencesTable.categories} @> ${JSON.stringify([f.category])}::jsonb`);
-  if (f.search) {
-    const s = `%${f.search}%`;
-    conds.push(
-      or(
-        ilike(legalReferencesTable.title, s),
-        ilike(legalReferencesTable.provision, s),
-        ilike(legalReferencesTable.citation, s),
-        ilike(legalReferencesTable.legalIssue, s),
-        ilike(legalReferencesTable.summary, s),
-        ilike(legalReferencesTable.principle, s),
-      )!,
-    );
+  // Word search: a reference matches when any meaningful word appears in it; best matches first.
+  const words = searchWords(f.search);
+  const fields = [
+    legalReferencesTable.title,
+    legalReferencesTable.provision,
+    legalReferencesTable.citation,
+    legalReferencesTable.court,
+    legalReferencesTable.legalIssue,
+    legalReferencesTable.summary,
+    legalReferencesTable.principle,
+  ];
+  if (words.length) {
+    conds.push(or(...words.flatMap((w) => [...fields.map((c) => ilike(c, `%${w}%`)), sql`${legalReferencesTable.categories}::text ilike ${`%${w}%`}`]))!);
   }
   const rows = await db.select().from(legalReferencesTable).where(conds.length ? and(...conds) : undefined).orderBy(legalReferencesTable.sourceType, legalReferencesTable.title);
+  if (words.length) {
+    const score = (r: (typeof rows)[number]) => {
+      const text = [r.title, r.provision, r.citation, r.court, r.legalIssue, r.summary, r.principle, JSON.stringify(r.categories)].join(" ").toLowerCase();
+      return words.filter((w) => text.includes(w)).length;
+    };
+    rows.sort((a, b) => score(b) - score(a));
+  }
   res.json(rows);
 });
+
+const STOP_WORDS = new Set(["case", "cases", "the", "and", "for", "with", "law", "judgment", "judgments", "vs", "versus"]);
+
+function searchWords(search?: string): string[] {
+  if (!search) return [];
+  return [...new Set(search.toLowerCase().split(/[^\p{L}\p{N}()]+/u))].filter((w) => w.length >= 2 && !STOP_WORDS.has(w));
+}
 
 router.post("/legal-references", async (req, res): Promise<void> => {
   const parsed = CreateLegalReferenceBody.safeParse(req.body);
