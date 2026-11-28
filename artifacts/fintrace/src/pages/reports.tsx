@@ -2,14 +2,21 @@ import { FileDown, FileSpreadsheet, FileText, History } from "lucide-react";
 import { useListReportTypes, useListGeneratedReports, getListGeneratedReportsQueryKey, type Case } from "@workspace/api-client-react";
 import { CaseLayout, useCaseId } from "@/components/case-layout";
 import { LoadingRows, ErrorState, EmptyState, Panel, Tag, Notice, DemoBadge, useInvalidate } from "@/components/common";
-import { fdatetime, human } from "@/lib/format";
+import { fdatetime, human, errMsg } from "@/lib/format";
+import { downloadFile } from "@/lib/download";
+import { useToast } from "@/hooks/use-toast";
 
 function Body({ c }: { c: Case }) {
   const caseId = useCaseId();
   const types = useListReportTypes();
   const gen = useListGeneratedReports(caseId);
   const inv = useInvalidate();
+  const { toast } = useToast();
   const href = (key: string, fmt: string) => `${import.meta.env.BASE_URL}api/cases/${caseId}/reports/export?type=${key}&format=${fmt}`;
+  const get = async (key: string, fmt: string) => {
+    try { await downloadFile(href(key, fmt)); inv(getListGeneratedReportsQueryKey(caseId)); }
+    catch (e) { toast({ title: "Download failed", description: errMsg(e), variant: "destructive" }); }
+  };
 
   return (
     <div className="space-y-5">
@@ -22,10 +29,10 @@ function Body({ c }: { c: Case }) {
               <div className="flex-1"><div className="font-display text-lg leading-tight">{t.name}</div><p className="text-xs text-muted-foreground mt-1">{t.description}</p></div></div>
             <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t">
               {t.formats.map((f) => (
-                <a key={f} href={href(t.key, f)} target="_blank" rel="noreferrer" onClick={() => setTimeout(() => inv(getListGeneratedReportsQueryKey(caseId)), 1500)}
+                <button key={f} type="button" onClick={() => get(t.key, f)}
                   className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium hover:border-primary hover:text-primary" data-testid={`link-export-${t.key}-${f}`}>
                   {f === "docx" ? <FileSpreadsheet className="h-3.5 w-3.5" /> : <FileDown className="h-3.5 w-3.5" />}{f.toUpperCase()}
-                </a>
+                </button>
               ))}
             </div>
           </div>

@@ -9,6 +9,7 @@ import { Markdown } from "@/components/markdown";
 import { fdatetime, human, errMsg } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { downloadFile } from "@/lib/download";
 
 const PROMPTS = ["Which credits above ₹2 lakh are still unclassified?", "Summarise cash deposits by financial year.", "What explains the largest asset acquired in the check period?", "Which family members have no documented income?"];
 
@@ -20,12 +21,20 @@ function citeHref(caseId: number, c: AssistantMessageCitationsItem) {
 const EXPORTS = [{ f: "xlsx", label: "Excel" }, { f: "docx", label: "Word" }, { f: "pdf", label: "PDF" }];
 
 function ExportLinks({ caseId, messageId }: { caseId: number; messageId: number }) {
+  const { toast } = useToast();
+  const [busy, setBusy] = useState<string | null>(null);
+  const get = async (f: string) => {
+    setBusy(f);
+    try { await downloadFile(`${import.meta.env.BASE_URL}api/cases/${caseId}/assistant/messages/${messageId}/export?format=${f}`); }
+    catch (e) { toast({ title: "Download failed", description: errMsg(e), variant: "destructive" }); }
+    finally { setBusy(null); }
+  };
   return (
     <div className="flex flex-wrap items-center gap-1.5 mt-2 pt-2 border-t">
       <span className="text-[11px] text-muted-foreground mr-1 inline-flex items-center gap-1"><Download className="h-3 w-3" />Download</span>
       {EXPORTS.map(({ f, label }) => (
-        <a key={f} href={`${import.meta.env.BASE_URL}api/cases/${caseId}/assistant/messages/${messageId}/export?format=${f}`} target="_blank" rel="noreferrer"
-          className="rounded-md border bg-card px-2 py-0.5 text-[11px] font-medium hover:border-primary hover:text-primary" data-testid={`link-export-answer-${f}`}>{label}</a>
+        <button key={f} type="button" onClick={() => get(f)} disabled={busy !== null}
+          className="inline-flex items-center gap-1 rounded-md border bg-card px-2 py-0.5 text-[11px] font-medium hover:border-primary hover:text-primary disabled:opacity-60" data-testid={`link-export-answer-${f}`}>{busy === f && <Loader2 className="h-3 w-3 animate-spin" />}{label}</button>
       ))}
     </div>
   );
