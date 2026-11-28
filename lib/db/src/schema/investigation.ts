@@ -112,7 +112,7 @@ export const assistantMessagesTable = pgTable("assistant_messages", {
   userId: integer("user_id").notNull(),
   role: text("role").notNull(),
   content: text("content").notNull(),
-  citations: jsonb("citations").$type<{ kind: string; id: number; label: string }[]>().notNull().default([]),
+  citations: jsonb("citations").$type<{ kind: string; id: number; label: string; page?: number }[]>().notNull().default([]),
   available: boolean("available").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

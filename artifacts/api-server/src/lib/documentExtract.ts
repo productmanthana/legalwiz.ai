@@ -153,6 +153,20 @@ async function pagesWithImages(pdfPath: string): Promise<Set<number>> {
   return pages;
 }
 
+/** JPEG of one page (1-based) of a PDF, for showing the source page next to an answer. */
+export async function renderPdfPage(buf: Buffer, page: number): Promise<Buffer> {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "page-"));
+  try {
+    const pdfPath = path.join(dir, "doc.pdf");
+    await fs.writeFile(pdfPath, buf);
+    const out = path.join(dir, "page");
+    await run("pdftoppm", ["-jpeg", "-jpegopt", "quality=80", "-r", "110", "-f", String(page), "-l", String(page), "-singlefile", pdfPath, out], { timeout: 120_000 });
+    return await fs.readFile(`${out}.jpg`);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+}
+
 async function renderPage(pdfPath: string, dir: string, page: number): Promise<Buffer> {
   const out = path.join(dir, `p${page}`);
   await run("pdftoppm", ["-png", "-r", "150", "-f", String(page), "-l", String(page), "-singlefile", pdfPath, out], { timeout: 120_000 });

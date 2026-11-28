@@ -29,10 +29,11 @@ function toPages(chunks: ChunkInput[]): PagePassage[] {
  * Document text for the assistant: the complete text of every live document when it
  * fits the budget (so totals and lists cover all pages), else the best search matches.
  */
-export async function documentPassages(caseId: number, question: string, liveDocIds: Set<number>): Promise<{ complete: boolean; pages: PagePassage[] }> {
+export async function documentPassages(caseId: number, question: string, liveDocIds: Set<number>): Promise<{ complete: boolean; pages: PagePassage[]; allPages: PagePassage[] }> {
   const all = (await listCaseChunks(caseId)).filter((c) => liveDocIds.has(c.documentId));
   const pages = toPages(all);
-  if (pages.reduce((n, p) => n + p.content.length, 0) <= FULL_TEXT_BUDGET) return { complete: true, pages };
+  if (pages.reduce((n, p) => n + p.content.length, 0) <= FULL_TEXT_BUDGET) return { complete: true, pages, allPages: pages };
   const hits = (await searchCaseChunks(caseId, question, 40)).filter((h) => liveDocIds.has(h.documentId));
-  return { complete: false, pages: toPages(hits) };
+  // allPages: every page, so the transaction tools search all statements even when the prompt only carries excerpts.
+  return { complete: false, pages: toPages(hits), allPages: pages };
 }

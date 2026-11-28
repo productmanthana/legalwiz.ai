@@ -217,6 +217,43 @@ export function parseStoredRows(pages: { documentId: number; documentName: strin
   return out;
 }
 
+export type SearchQuery = { includeAny?: string[]; excludeAny?: string[]; onDate?: string; fromDate?: string; toDate?: string };
+
+/** Every debit AND credit row matching names/keywords and dates, across all years, with per-year totals. */
+export function searchRows(rows: StoredRow[], q: SearchQuery) {
+  const inc = (q.includeAny ?? []).map((s) => s.toLowerCase()).filter(Boolean);
+  const exc = (q.excludeAny ?? []).map((s) => s.toLowerCase()).filter(Boolean);
+  const from = q.onDate || q.fromDate;
+  const to = q.onDate || q.toDate;
+  const matched = rows.filter((r) => {
+    if (r.kind !== "txn" || (!r.debit && !r.credit)) return false;
+    const hay = `${r.particulars} ${r.ref}`.toLowerCase();
+    if (inc.length && !inc.some((k) => hay.includes(k))) return false;
+    if (exc.some((k) => hay.includes(k))) return false;
+    if (from && (!r.isoDate || r.isoDate < from)) return false;
+    if (to && (!r.isoDate || r.isoDate > to)) return false;
+    return true;
+  }).sort((a, b) => (a.isoDate ?? "").localeCompare(b.isoDate ?? ""));
+  const byYear = new Map<string, { year: string; count: number; debit: number; credit: number }>();
+  for (const r of matched) {
+    const y = r.isoDate?.slice(0, 4) ?? "unknown";
+    const e = byYear.get(y) ?? { year: y, count: 0, debit: 0, credit: 0 };
+    e.count++; e.debit = round2(e.debit + (r.debit ?? 0)); e.credit = round2(e.credit + (r.credit ?? 0));
+    byYear.set(y, e);
+  }
+  const debit = round2(matched.reduce((s, r) => s + (r.debit ?? 0), 0));
+  const credit = round2(matched.reduce((s, r) => s + (r.credit ?? 0), 0));
+  return {
+    matchedRows: matched.length,
+    totalDebit: debit,
+    totalCredit: credit,
+    netCreditMinusDebit: round2(credit - debit),
+    byYear: [...byYear.values()],
+    rowsNeedingReview: reviewCount(matched),
+    rows: matched.slice(0, 1000).map((r) => ({ ref: `${r.documentId}:${r.no}`, documentId: r.documentId, document: r.documentName, page: r.page, date: r.date, particulars: r.particulars, debit: r.debit, credit: r.credit, balance: r.balance, check: r.check })),
+  };
+}
+
 export type RowQuery = {
   column: "credit" | "debit";
   rowRefs?: string[];

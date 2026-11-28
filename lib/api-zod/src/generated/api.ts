@@ -2654,7 +2654,8 @@ export const ListAssistantMessagesResponseItem = zod.object({
   "citations": zod.array(zod.object({
   "kind": zod.enum(['transaction', 'document', 'asset', 'legal_reference', 'ledger_entry']),
   "id": zod.int(),
-  "label": zod.string()
+  "label": zod.string(),
+  "page": zod.int().optional().describe('Page of the document the answer relied on')
 })).optional(),
   "available": zod.boolean().optional(),
   "createdAt": zod.iso.datetime({"offset":true})
@@ -2682,7 +2683,8 @@ export const AskAssistantResponse = zod.object({
   "citations": zod.array(zod.object({
   "kind": zod.enum(['transaction', 'document', 'asset', 'legal_reference', 'ledger_entry']),
   "id": zod.int(),
-  "label": zod.string()
+  "label": zod.string(),
+  "page": zod.int().optional().describe('Page of the document the answer relied on')
 })).optional(),
   "available": zod.boolean().optional(),
   "createdAt": zod.iso.datetime({"offset":true})

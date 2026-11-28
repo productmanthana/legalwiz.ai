@@ -1,7 +1,7 @@
 import type { AiTool } from "./ai";
 import type { PagePassage } from "./assistantContext";
 import { round2 } from "./finance";
-import { parseStoredRows, sumRows, type RowQuery } from "./statementRows";
+import { parseStoredRows, searchRows, sumRows, type RowQuery, type SearchQuery } from "./statementRows";
 import { buildStatementTables, type StatementTables } from "./statementTables";
 
 const strList = { type: "array", items: { type: "string" } };
@@ -10,10 +10,55 @@ const strList = { type: "array", items: { type: "string" } };
  * Tools that let the assistant get exact totals computed in code instead of adding numbers itself.
  * `tables` collects statement tables built during the answer, keyed by their marker id (S1, S2…).
  */
-export function assistantTools(passages: PagePassage[]): { tools: AiTool[]; tables: Map<string, StatementTables> } {
+type LedgerTxn = { id: number; txnDate: string; description: string; debit: number; credit: number; documentIds: number[] };
+
+export function assistantTools(passages: PagePassage[], ledger: LedgerTxn[] = []): { tools: AiTool[]; tables: Map<string, StatementTables> } {
   const rows = parseStoredRows(passages);
   const tables = new Map<string, StatementTables>();
   const tools: AiTool[] = [
+    {
+      name: "search_transactions",
+      description:
+        `Finds EVERY transaction, debits and credits together, in all uploaded statements (${rows.length} rows) and the case ledger (${ledger.length} transactions), across all years. ` +
+        "Use it for questions about a person, party or account (e.g. every transaction with \"Jayappa\" — a 2022 debit and a 2025 credit are both returned), or about a particular day (onDate) or period. " +
+        "A row matches when its particulars contain ANY includeAny keyword (case-insensitive; pass name spelling variants and parts, e.g. [\"jayappa\", \"jayapa\", \"jaiappa\"]; empty = all rows), NO excludeAny keyword, and its date is in range. " +
+        "Returns statement rows with documentId and page (for citing the page), totals by year, total debit, total credit and net, plus matching ledger transactions.",
+      parameters: {
+        type: "object",
+        properties: {
+          includeAny: strList,
+          excludeAny: strList,
+          onDate: { type: "string", description: "YYYY-MM-DD, a single day" },
+          fromDate: { type: "string", description: "YYYY-MM-DD, inclusive" },
+          toDate: { type: "string", description: "YYYY-MM-DD, inclusive" },
+        },
+      },
+      run: (args) => {
+        const q = args as SearchQuery;
+        const inc = (q.includeAny ?? []).map((s) => s.toLowerCase()).filter(Boolean);
+        const exc = (q.excludeAny ?? []).map((s) => s.toLowerCase()).filter(Boolean);
+        const from = q.onDate || q.fromDate;
+        const to = q.onDate || q.toDate;
+        const led = ledger.filter((t) => {
+          const hay = t.description.toLowerCase();
+          if (inc.length && !inc.some((k) => hay.includes(k))) return false;
+          if (exc.some((k) => hay.includes(k))) return false;
+          if (from && t.txnDate < from) return false;
+          if (to && t.txnDate > to) return false;
+          return true;
+        }).sort((a, b) => a.txnDate.localeCompare(b.txnDate));
+        return {
+          statementRows: searchRows(rows, q),
+          ledgerTransactions: {
+            matched: led.length,
+            totalDebit: round2(led.reduce((s, t) => s + t.debit, 0)),
+            totalCredit: round2(led.reduce((s, t) => s + t.credit, 0)),
+            rows: led.slice(0, 500).map((t) => ({ transactionId: t.id, date: t.txnDate, description: t.description.slice(0, 120), debit: t.debit, credit: t.credit, documentIds: t.documentIds })),
+          },
+          note: "Ledger transactions may be the same entries as statement rows (imported from the same statement): match them by date and amount and never add both.",
+        };
+      },
+    },
     {
       name: "sum_statement_rows",
       description:

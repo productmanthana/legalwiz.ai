@@ -27,7 +27,7 @@ import { renderDocx, renderPdf, renderXlsx } from "../lib/reports";
 
 const router: IRouter = Router();
 
-type Citation = { kind: "transaction" | "document" | "asset" | "legal_reference" | "ledger_entry"; id: number; label: string };
+type Citation = { kind: "transaction" | "document" | "asset" | "legal_reference" | "ledger_entry"; id: number; label: string; page?: number };
 
 router.get("/cases/:caseId/assistant/messages", async (req, res): Promise<void> => {
   const ctx = await loadCase(req, res, intParam(req, "caseId"));
@@ -88,9 +88,9 @@ router.post("/cases/:caseId/assistant/messages", async (req, res): Promise<void>
   const docText = weaviateConfigured()
     ? await documentPassages(caseId, parsed.data.message, liveDocIds).catch((err) => {
         req.log.error({ err }, "Document search failed");
-        return { complete: false, pages: [] };
+        return { complete: false, pages: [], allPages: [] };
       })
-    : { complete: false, pages: [] };
+    : { complete: false, pages: [], allPages: [] };
   const passages = docText.pages;
   const history = await db
     .select()
@@ -116,7 +116,7 @@ router.post("/cases/:caseId/assistant/messages", async (req, res): Promise<void>
     legalReferences: links.map((l) => ({ id: l.ref.id, title: l.ref.title, citation: l.ref.citation, verificationStatus: l.ref.verificationStatus, principle: l.ref.principle })),
     daJudgments: judgments.map((j) => ({ id: j.id, title: j.title, court: j.court, decided: j.decisionDate, citation: j.citation, issue: j.legalIssue, principle: j.principle, verificationStatus: j.verificationStatus })),
   };
-  const { tools, tables } = assistantTools(passages);
+  const { tools, tables } = assistantTools(docText.allPages, txns);
   const convo = history.slice(-10).map((m) => `${m.role.toUpperCase()}: ${m.content}`).join("\n\n");
 
   try {
@@ -126,6 +126,8 @@ You answer questions about one case using the JSON case data supplied. Format th
 documentPassages hold text of the case's uploaded documents, one entry per page. When documentTextIsComplete is true they are the COMPLETE text of every page of every document: answer from all of them, and for totals or lists go through every page and every matching entry. When it is false they are only the best-matching excerpts: say so in one short sentence.
 When the question asks for data, totals, lists or schedules, present the itemised entries as a Markdown table (with date, document, page, description and amount columns where available) followed by the total row.
 ALWAYS end every answer with a section "## Relevance to DA cases – judicial precedents": 2 to 5 court judgments, most recent first, each as a bullet "**<Case name>** (<Court>, <year>) – <the principle laid down> – <why it means the figures or facts in THIS answer should be considered in the disproportionate-assets computation (e.g. pension, salary, agricultural income or family income as a known source of income, burden of proof, the check period, the permissible margin)>". Prefer judgments in daJudgments and legalReferences (cite them by id under legal_reference and mention their verification status when it is "unverified"). You may add other well-established, recent Supreme Court or High Court judgments on disproportionate assets that you are certain exist; give only the case name, court and year, never an invented citation, SCC reference or paragraph number, and end those bullets with "(verify citation before reliance)". Your inability to state guilt or liability still applies: explain relevance, not conclusions.
+TRANSACTIONS WITH A PERSON, PARTY OR ON A DAY: when the user asks about transactions with someone (e.g. "Jayappa"), on a particular date, or overall, call search_transactions with the name's spelling variants (and onDate or a date range only when the user gives one). Report EVERY matching debit and credit across all years, because money may go out in one year (e.g. a 2022 debit) and come back in another (e.g. a 2025 credit): a Markdown table in date order with Date, Document, Page, Particulars, Debit, Credit columns, then a year-wise summary (debit, credit per year) and overall total debit, total credit and net, all from the tool. Point out debits and later credits that appear to be repayments of each other. If nothing matches, say so and list the spellings searched.
+CITE THE SOURCE PAGES: for every statement row or document passage you rely on, add a citation {"kind": "document", "id": <documentId>, "page": <page>} for that page (one per distinct page) so the user can open the page itself.
 TOTALS MUST COME FROM THE TOOLS, never from your own arithmetic. Scanned statements carry a table "| # | Date | Ref | Particulars | Debit | Credit | Balance | Check |" whose rows were checked against the printed running balance. To total a kind of entry (e.g. pension), do not rely on one keyword: first call sum_statement_rows with the column and date range but no keywords to get every candidate row, classify each row yourself from its particulars (OCR spellings vary, e.g. "PEN", "Fension", "pensicn", "DA arrear", "DR ARREAR PAYMENT"; unlabelled credits are not counted), then call it again with rowRefs listing exactly the rows you chose and report that total. Interest ("Int.Pd"), NEFT/transfers from persons, cash deposits and other unlabelled credits are never pension. Do not drop a bank entry because another source covers that month: keep it in the bank total and explain the overlap. Consider related debits too (e.g. a recovery of excess pension) and say how you treated them. For any other figures (schedules, tables in text, ledger data) pass the itemised amounts to add_numbers. State the row count and the tool's total. Where two documents cover the same period (e.g. a pension schedule and the bank credits), do not double count: say which source each period is taken from and reconcile the overlap.
 STATEMENT FORMAT — use it whenever the user asks for a statement, schedule, month-wise or year-wise working, or a Word/PDF/report-ready answer (and for any pension, salary, rent or interest receipts question covering several years). Lay the answer out as a formal statement, in this order:
 1. "# Statement of <what> received" on the first line, then one line naming the person (with any PPO/account/reference number) and the period covered.
@@ -154,9 +156,9 @@ ${parsed.data.language === "kn" ? "" : 'LANGUAGE: Write the answer in English. M
     for (const c of out.citations ?? []) {
       const kind = c.kind as Citation["kind"];
       const base = lookups[kind]?.get(Number(c.id));
-      const page = kind === "document" && passages.some((p) => p.documentId === Number(c.id) && p.pageNumber === Number(c.page)) ? Number(c.page) : null;
+      const page = kind === "document" && docText.allPages.some((p) => p.documentId === Number(c.id) && p.pageNumber === Number(c.page)) ? Number(c.page) : null;
       const label = base && page ? `${base}, p. ${page}` : base;
-      if (label && !citations.some((x) => x.kind === kind && x.id === Number(c.id) && x.label === label)) citations.push({ kind, id: Number(c.id), label });
+      if (label && !citations.some((x) => x.kind === kind && x.id === Number(c.id) && x.label === label)) citations.push({ kind, id: Number(c.id), label, ...(page ? { page } : {}) });
       else if (!label) dropped++;
     }
     let answer = expandStatementMarkers(out.answer?.trim() || "No answer was produced.", tables).replace(/\n{3,}/g, "\n\n");

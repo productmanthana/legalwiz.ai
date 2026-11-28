@@ -11,4 +11,6 @@ export type AssistantMessageCitationsItem = {
   kind: AssistantMessageCitationsItemKind;
   id: number;
   label: string;
+  /** Page of the document the answer relied on */
+  page?: number;
 };

@@ -2350,6 +2350,7 @@ components:
               kind: { type: string, enum: [transaction, document, asset, legal_reference, ledger_entry] }
               id: { type: integer }
               label: { type: string }
+              page: { type: integer, description: "Page of the document the answer relied on" }
         available: { type: boolean }
         createdAt: { type: string, format: date-time }
     AssistantQuestion:

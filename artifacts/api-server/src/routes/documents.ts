@@ -7,6 +7,7 @@ import { audit, diff } from "../lib/audit";
 import { serializeDocs } from "../lib/serialize";
 import { ObjectNotFoundError, ObjectStorageService } from "../lib/objectStorage";
 import { queueDocumentIndex } from "../lib/documentIndex";
+import { renderPdfPage } from "../lib/documentExtract";
 import { deleteDocumentChunks, weaviateConfigured } from "../lib/weaviate";
 
 const router: IRouter = Router();
@@ -15,6 +16,39 @@ const storage = new ObjectStorageService();
 async function allDocs(caseId: number) {
   return db.select().from(documentsTable).where(eq(documentsTable.caseId, caseId));
 }
+
+// Small in-memory cache of rendered pages (documents are immutable; new versions get new ids).
+const pageCache = new Map<string, Buffer>();
+
+/** Image of one page of a document, so the assistant's answers can show the page they relied on. */
+router.get("/documents/:documentId/pages/:page/image", async (req, res): Promise<void> => {
+  const [d] = await db.select().from(documentsTable).where(eq(documentsTable.id, intParam(req, "documentId")));
+  if (!d) { res.status(404).json({ error: "Document not found" }); return; }
+  const ctx = await loadCase(req, res, d.caseId, "read");
+  if (!ctx) return;
+  const page = intParam(req, "page");
+  const isPdf = d.contentType === "application/pdf" || d.name.toLowerCase().endsWith(".pdf");
+  const isImage = d.contentType.startsWith("image/");
+  if (!page || page < 1 || (!isPdf && !isImage)) { res.status(415).json({ error: "No page image for this document type" }); return; }
+  try {
+    const key = `${d.id}:${page}`;
+    let img = pageCache.get(key);
+    if (!img) {
+      const [buf] = await (await storage.getObjectEntityFile(d.objectPath)).download();
+      if (isImage) { res.setHeader("Content-Type", d.contentType); res.setHeader("Cache-Control", "private, max-age=3600"); res.send(buf); return; }
+      img = await renderPdfPage(buf, page);
+      pageCache.set(key, img);
+      if (pageCache.size > 60) pageCache.delete(pageCache.keys().next().value!);
+    }
+    res.setHeader("Content-Type", "image/jpeg");
+    res.setHeader("Cache-Control", "private, max-age=3600");
+    res.send(img);
+  } catch (err) {
+    if (err instanceof ObjectNotFoundError) { res.status(404).json({ error: "File not found" }); return; }
+    req.log.error({ err }, "Page render failed");
+    res.status(500).json({ error: "Could not render the page" });
+  }
+});
 
 router.get("/cases/:caseId/documents", async (req, res): Promise<void> => {
   const ctx = await loadCase(req, res, intParam(req, "caseId"));
