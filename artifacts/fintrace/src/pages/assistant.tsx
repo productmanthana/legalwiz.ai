@@ -4,7 +4,7 @@ import { Send, Loader2, Bot, CloudOff, Download } from "lucide-react";
 import { useListAssistantMessages, useAskAssistant, useListCases, useGetCase, getGetCaseQueryKey, getListAssistantMessagesQueryKey, type Case, type AssistantMessageCitationsItem } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { LoadingRows, ErrorState, EmptyState, Tag, AiBadge, useInvalidate, Notice, PageHeader, nativeSelect } from "@/components/common";
+import { LoadingRows, ErrorState, EmptyState, Tag, useInvalidate, Notice, PageHeader, nativeSelect } from "@/components/common";
 import { Markdown } from "@/components/markdown";
 import { fdatetime, human, errMsg } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
@@ -54,7 +54,7 @@ function Body({ c }: { c: Case }) {
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {q.isLoading ? <LoadingRows /> : q.isError ? <ErrorState error={q.error} onRetry={() => q.refetch()} /> : !q.data?.length && !pending ? (
             <div className="h-full grid place-items-center text-center">
-              <div><Bot className="h-8 w-8 mx-auto text-[hsl(var(--teal))]" /><div className="font-display text-xl mt-2">Ask about {c.subjectName ?? "this case"}</div><p className="text-sm text-muted-foreground max-w-md mt-1">Answers draw only on this case's records and cite them. Treat every answer as an AI suggestion to verify.</p>
+              <div><Bot className="h-8 w-8 mx-auto text-[hsl(var(--teal))]" /><div className="font-display text-xl mt-2">Ask about {c.subjectName ?? "this case"}</div><p className="text-sm text-muted-foreground max-w-md mt-1">Answers draw only on this case's records and cite them. Verify every answer against the source documents.</p>
                 <div className="flex flex-wrap justify-center gap-2 mt-4 max-w-lg">{PROMPTS.map((p) => <button key={p} onClick={() => send(p)} className="text-xs rounded-full border px-3 py-1.5 hover:border-primary hover:text-primary" data-testid="button-prompt">{p}</button>)}</div></div>
             </div>
           ) : (
@@ -62,7 +62,7 @@ function Body({ c }: { c: Case }) {
               {q.data?.map((m) => (
                 <div key={m.id} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")} data-testid={`message-${m.id}`}>
                   <div className={cn("max-w-[85%] min-w-0 rounded-lg px-3.5 py-2.5", m.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted/60 border")}>
-                    {m.role !== "user" && <div className="flex items-center gap-2 mb-1.5">{m.available === false ? <Tag><CloudOff className="h-3 w-3" />AI unavailable</Tag> : <AiBadge />}</div>}
+                    {m.role !== "user" && m.available === false && <div className="flex items-center gap-2 mb-1.5"><Tag><CloudOff className="h-3 w-3" />AI unavailable</Tag></div>}
                     {m.role === "user" ? <div className="text-sm whitespace-pre-wrap">{m.content}</div> : <Markdown content={m.content} />}
                     {!!m.citations?.length && <div className="flex flex-wrap gap-1 mt-2">{m.citations.map((ct, i) => <Link key={i} href={citeHref(caseId, ct)} className="inline-flex"><Tag tone="teal">{human(ct.kind)} #{ct.id} · {ct.label}</Tag></Link>)}</div>}
                     <div className={cn("text-[10px] mt-1.5", m.role === "user" ? "text-primary-foreground/60" : "text-muted-foreground")}>{fdatetime(m.createdAt)}</div>

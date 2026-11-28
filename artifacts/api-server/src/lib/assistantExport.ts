@@ -47,11 +47,9 @@ export function answerReport(caseTitle: string, question: string, m: Message, by
   }
 
   const sections: ReportSection[] = statement ? [] : [{ heading: "Question", paragraphs: [question || "—"] }];
-  const missing: string[] = [];
   let heading = statement ? "" : "Answer";
   let used = false; // heading already printed for the current section
   let paras: string[] = [];
-  let inMissing = false;
   let tables = 0;
   const nextHeading = () => {
     const h = used ? "" : heading;
@@ -102,22 +100,16 @@ export function answerReport(caseTitle: string, question: string, m: Message, by
       flush();
       heading = plain(hm[1]!);
       used = false;
-      inMissing = /missing information/i.test(heading);
       continue;
     }
     const text = plain(line.replace(/^\s*[-*+]\s+/, "• ").replace(/^\s*(\d+)\.\s+/, "$1. "));
     if (!text) continue;
-    const bold = line.match(/\*\*([^*]+?)\*\*\s*:?/)?.[1] ?? "";
-    if (/missing information/i.test(bold)) inMissing = true;
-    else if (bold && /verified fact|user-provided|ai suggestion/i.test(bold)) inMissing = false;
-    if (inMissing) missing.push(text.replace(/^•?\s*Missing information\s*:?\s*/i, "• ").replace(/^•\s*$/, ""));
-    else paras.push(text);
+    paras.push(text);
   }
   flush();
-  sections.push({ heading: "Missing information", paragraphs: missing.filter(Boolean).length ? missing.filter(Boolean) : ["None identified in this answer."] });
   if (statement) sections.push({ heading: "Request", paragraphs: [question || "—"] });
   if (m.citations.length) sections.push({ heading: "Sources", table: { columns: ["Type", "Record #", "Reference"], rows: m.citations.map((c) => [c.kind.replace(/_/g, " "), c.id, c.label]) } });
-  sections.push({ heading: "Note", paragraphs: ["This answer is an AI suggestion. Verify every figure against the source documents before relying on it.", DISCLAIMER] });
+  sections.push({ heading: "Note", paragraphs: ["Verify every figure against the source documents before relying on it.", DISCLAIMER] });
 
   return { title, subtitle, sections };
 }

@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import {
   db,
   assistantMessagesTable,
@@ -61,7 +61,7 @@ router.post("/cases/:caseId/assistant/messages", async (req, res): Promise<void>
     return;
   }
 
-  const [txns, assets, docs, entries, family, liabilities, links] = await Promise.all([
+  const [txns, assets, docs, entries, family, liabilities, links, judgments] = await Promise.all([
     db.select().from(transactionsTable).where(eq(transactionsTable.caseId, caseId)),
     db.select().from(assetsTable).where(eq(assetsTable.caseId, caseId)),
     db.select().from(documentsTable).where(and(eq(documentsTable.caseId, caseId), eq(documentsTable.isArchived, false))),
@@ -73,6 +73,13 @@ router.post("/cases/:caseId/assistant/messages", async (req, res): Promise<void>
       .from(caseLegalLinksTable)
       .innerJoin(legalReferencesTable, eq(legalReferencesTable.id, caseLegalLinksTable.legalReferenceId))
       .where(eq(caseLegalLinksTable.caseId, caseId)),
+    // Shared library judgments on disproportionate assets, most recent first.
+    db
+      .select()
+      .from(legalReferencesTable)
+      .where(and(eq(legalReferencesTable.sourceType, "judgment"), sql`${legalReferencesTable.categories} @> '["disproportionate_assets"]'::jsonb`))
+      .orderBy(sql`${legalReferencesTable.decisionDate} desc nulls last`, desc(legalReferencesTable.id))
+      .limit(40),
   ]);
   const [da, spots] = await Promise.all([daCalculation(ctx.c, false), blindSpots(caseId)]);
   // Relevant passages from this case's indexed documents (Weaviate tenant = this case only).
@@ -106,6 +113,7 @@ router.post("/cases/:caseId/assistant/messages", async (req, res): Promise<void>
     daWorking: { components: da.components.map((c) => ({ code: c.code, amount: c.amount })), disproportion: da.disproportion, percent: da.disproportionPercent, missing: da.missingInformation },
     blindSpots: spots.map((s) => ({ title: s.title, severity: s.severity, status: s.reviewStatus })),
     legalReferences: links.map((l) => ({ id: l.ref.id, title: l.ref.title, citation: l.ref.citation, verificationStatus: l.ref.verificationStatus, principle: l.ref.principle })),
+    daJudgments: judgments.map((j) => ({ id: j.id, title: j.title, court: j.court, decided: j.decisionDate, citation: j.citation, issue: j.legalIssue, principle: j.principle, verificationStatus: j.verificationStatus })),
   };
   const { tools, tables } = assistantTools(passages);
   const convo = history.slice(-10).map((m) => `${m.role.toUpperCase()}: ${m.content}`).join("\n\n");
@@ -113,11 +121,11 @@ router.post("/cases/:caseId/assistant/messages", async (req, res): Promise<void>
   try {
     const out = await completeJsonWithTools<{ answer?: string; citations?: { kind?: string; id?: number; page?: number }[] }>(
       `${GUARDRAILS}
-You answer questions about one case using the JSON case data supplied. Format the answer as concise Markdown. Prefix each key point with a bold label: **Verified fact**, **User-provided**, **AI suggestion**, or **Missing information**.
-documentPassages hold text of the case's uploaded documents, one entry per page. When documentTextIsComplete is true they are the COMPLETE text of every page of every document: answer from all of them, and for totals or lists go through every page and every matching entry. When it is false they are only the best-matching excerpts: say so under **Missing information**.
+You answer questions about one case using the JSON case data supplied. Format the answer as concise, report-ready Markdown. Do NOT prefix points with labels such as "Verified fact", "User-provided", "AI suggestion" or "Missing information", and do NOT add a "Missing information" section; this overrides the labelling rule above.
+documentPassages hold text of the case's uploaded documents, one entry per page. When documentTextIsComplete is true they are the COMPLETE text of every page of every document: answer from all of them, and for totals or lists go through every page and every matching entry. When it is false they are only the best-matching excerpts: say so in one short sentence.
 When the question asks for data, totals, lists or schedules, present the itemised entries as a Markdown table (with date, document, page, description and amount columns where available) followed by the total row.
-Always end with a **Missing information** section listing what is missing, illegible or uncertain (unreadable pages, gaps in periods, conflicting figures) and what the user should provide; write "None identified" if nothing is missing.
-TOTALS MUST COME FROM THE TOOLS, never from your own arithmetic. Scanned statements carry a table "| # | Date | Ref | Particulars | Debit | Credit | Balance | Check |" whose rows were checked against the printed running balance. To total a kind of entry (e.g. pension), do not rely on one keyword: first call sum_statement_rows with the column and date range but no keywords to get every candidate row, classify each row yourself from its particulars (OCR spellings vary, e.g. "PEN", "Fension", "pensicn", "DA arrear", "DR ARREAR PAYMENT"; unlabelled credits are not counted), then call it again with rowRefs listing exactly the rows you chose and report that total. Interest ("Int.Pd"), NEFT/transfers from persons, cash deposits and other unlabelled credits are never pension. Do not drop a bank entry because another source covers that month: keep it in the bank total and explain the overlap. Under **Missing information** list EVERY row flagged "check original" with its date, amount and any balanceSuggestsAmount (the amount the running balance implies). Consider related debits too (e.g. a recovery of excess pension) and say how you treated them. For any other figures (schedules, tables in text, ledger data) pass the itemised amounts to add_numbers. State the row count and the tool's total; list rows marked "check original" under **Missing information**. Where two documents cover the same period (e.g. a pension schedule and the bank credits), do not double count: say which source each period is taken from and reconcile the overlap.
+ALWAYS end every answer with a section "## Relevance to DA cases – judicial precedents": 2 to 5 court judgments, most recent first, each as a bullet "**<Case name>** (<Court>, <year>) – <the principle laid down> – <why it means the figures or facts in THIS answer should be considered in the disproportionate-assets computation (e.g. pension, salary, agricultural income or family income as a known source of income, burden of proof, the check period, the permissible margin)>". Prefer judgments in daJudgments and legalReferences (cite them by id under legal_reference and mention their verification status when it is "unverified"). You may add other well-established, recent Supreme Court or High Court judgments on disproportionate assets that you are certain exist; give only the case name, court and year, never an invented citation, SCC reference or paragraph number, and end those bullets with "(verify citation before reliance)". Your inability to state guilt or liability still applies: explain relevance, not conclusions.
+TOTALS MUST COME FROM THE TOOLS, never from your own arithmetic. Scanned statements carry a table "| # | Date | Ref | Particulars | Debit | Credit | Balance | Check |" whose rows were checked against the printed running balance. To total a kind of entry (e.g. pension), do not rely on one keyword: first call sum_statement_rows with the column and date range but no keywords to get every candidate row, classify each row yourself from its particulars (OCR spellings vary, e.g. "PEN", "Fension", "pensicn", "DA arrear", "DR ARREAR PAYMENT"; unlabelled credits are not counted), then call it again with rowRefs listing exactly the rows you chose and report that total. Interest ("Int.Pd"), NEFT/transfers from persons, cash deposits and other unlabelled credits are never pension. Do not drop a bank entry because another source covers that month: keep it in the bank total and explain the overlap. Consider related debits too (e.g. a recovery of excess pension) and say how you treated them. For any other figures (schedules, tables in text, ledger data) pass the itemised amounts to add_numbers. State the row count and the tool's total. Where two documents cover the same period (e.g. a pension schedule and the bank credits), do not double count: say which source each period is taken from and reconcile the overlap.
 STATEMENT FORMAT — use it whenever the user asks for a statement, schedule, month-wise or year-wise working, or a Word/PDF/report-ready answer (and for any pension, salary, rent or interest receipts question covering several years). Lay the answer out as a formal statement, in this order:
 1. "# Statement of <what> received" on the first line, then one line naming the person (with any PPO/account/reference number) and the period covered.
 2. "## Summary": a table | | Particulars | Period | Entries | Amount (₹) | with lettered rows (A, B, …): one row per source (e.g. A = pension as per drawn schedule, B = pension credits in bank A/c <no.>), then rows for related debits (e.g. C = Less: pension recovered by bank, listing the amounts) and the net (e.g. D = Net received (B − C)). There is NO "A + B" row: the sources overlap, so each keeps its own total and the overlap is explained in the paragraphs.
@@ -125,7 +133,7 @@ STATEMENT FORMAT — use it whenever the user asks for a statement, schedule, mo
 4. "## Part A – Month-wise <...> as per <document> (<period>)": for figures in document text, a table | Sl. | Month | <component columns, e.g. Basic (₹), DA (₹)> | Total (₹) | Remarks | with every month, a bold "Total <year>" row after each year and a bold grand total; get every total from add_numbers.
 5. "## Part B – Month-wise <...> credited in bank (<period>)": call build_statement_tables with EVERY matching credit row from the first one in the statement (including credits for a month also shown in Part A) and the related debit rows, and place its [[Sx:monthly]] marker. Explain that months with no entry were paid in another month where that is so.
 6. "## Part C – List of all <...> entries in the bank statement": place the [[Sx:entries]] marker.
-7. "## Missing information".
+7. "## Relevance to DA cases – judicial precedents".
 Number Parts only for the sources that exist. Write Indian digit grouping without "Rs." inside tables whose header says (₹).
 Quote them with the document name and page (e.g. "Sale deed, p. 4"). Passages "read by vision model" were transcribed from scanned pages or images and must be checked against the original.
 Return JSON: {"answer": string, "citations": [{"kind": "transaction"|"document"|"asset"|"legal_reference"|"ledger_entry", "id": number, "page"?: number}]} citing the records you relied on by id (for a document passage use its documentId and page).`,
@@ -137,7 +145,7 @@ Return JSON: {"answer": string, "citations": [{"kind": "transaction"|"document"|
       transaction: new Map(txns.map((t) => [t.id, `${t.txnDate} ${t.description.slice(0, 50)} (${t.credit > 0 ? "Cr " + t.credit : "Dr " + t.debit})`])),
       document: new Map(docs.map((d) => [d.id, d.name])),
       asset: new Map(assets.map((a) => [a.id, a.description])),
-      legal_reference: new Map(links.map((l) => [l.ref.id, `${l.ref.title} [${l.ref.verificationStatus}]`])),
+      legal_reference: new Map([...judgments.map((j) => [j.id, `${j.title} [${j.verificationStatus}]`] as const), ...links.map((l) => [l.ref.id, `${l.ref.title} [${l.ref.verificationStatus}]`] as const)]),
       ledger_entry: new Map(entries.map((e) => [e.id, `${e.category} ${e.amount} (${e.entryDate})`])),
     };
     const citations: Citation[] = [];
