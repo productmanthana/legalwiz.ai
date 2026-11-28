@@ -22,6 +22,42 @@ export function searchJudgmentsOnline(query: string): Promise<OnlineJudgment[]> 
   return results;
 }
 
+export type ChatTurn = { role: "user" | "assistant"; content: string };
+export type JudgmentContext = { title: string; court?: string | null; date?: string | null; url?: string | null; summary?: string | null };
+
+/**
+ * Multi-turn chat about court judgments with live web search.
+ * When a judgment is given, the conversation is about that judgment.
+ */
+export async function judgmentChat(messages: ChatTurn[], judgment?: JudgmentContext): Promise<{ answer: string; sources: { title: string; url: string }[] }> {
+  const openai = getClient();
+  if (!openai) throw new Error("AI is not configured");
+  const today = new Date().toISOString().slice(0, 10);
+  const focus = judgment
+    ? `\n\nThe user is asking about this judgment:\nTitle: ${judgment.title}\nCourt: ${judgment.court ?? "unknown"}\nDate: ${judgment.date ?? "unknown"}\nLink: ${judgment.url ?? "none"}\nSummary: ${judgment.summary ?? "none"}\nSearch the web (open the link when available) to read it before answering.`
+    : "";
+  const resp = await openai.responses.create({
+    model: SEARCH_MODEL,
+    tools: [{ type: "web_search" }],
+    instructions:
+      `You are a legal research assistant for Indian law (Prevention of Corruption Act, Karnataka Lokayukta, disproportionate assets, Income-tax). Today is ${today}. ` +
+      "Use web search for every question so answers reflect current judgments, including recent ones. Answer in clear markdown: facts, issues, holding, reasoning and relevance as applicable. " +
+      "Name cases with court and date and link to the source pages you found. Never invent cases, citations, paragraphs or links; say so when something could not be confirmed. " +
+      "End with a one-line reminder to verify against the official judgment before relying on it." + focus,
+    input: messages.slice(-20).map((m) => ({ role: m.role, content: m.content })),
+    max_output_tokens: 8000,
+  });
+  const sources = new Map<string, string>();
+  for (const item of resp.output) {
+    if (item.type !== "message") continue;
+    for (const c of item.content) {
+      if (c.type !== "output_text") continue;
+      for (const a of c.annotations ?? []) if (a.type === "url_citation") sources.set(a.url, a.title || a.url);
+    }
+  }
+  return { answer: resp.output_text ?? "", sources: [...sources].map(([url, title]) => ({ url, title })) };
+}
+
 async function runSearch(query: string): Promise<OnlineJudgment[]> {
   const openai = getClient();
   if (!openai) throw new Error("AI is not configured");

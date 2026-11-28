@@ -10,7 +10,7 @@ import {
 } from "@workspace/api-zod";
 import { currentUser, intParam, loadCase } from "../lib/access";
 import { audit, diff } from "../lib/audit";
-import { searchJudgmentsOnline } from "../lib/onlineJudgments";
+import { searchJudgmentsOnline, judgmentChat } from "../lib/onlineJudgments";
 
 const router: IRouter = Router();
 
@@ -63,6 +63,25 @@ router.get("/legal-online-search", async (req, res): Promise<void> => {
   } catch (e) {
     req.log?.error({ err: e }, "Online judgment search failed");
     res.status(502).json({ error: "Online search is unavailable right now. Try again shortly." });
+  }
+});
+
+// Multi-turn judgment Q&A with live web search (optionally about one judgment).
+router.post("/legal-chat", async (req, res): Promise<void> => {
+  const { messages, judgment } = req.body ?? {};
+  const turns = Array.isArray(messages)
+    ? messages.filter((m) => (m?.role === "user" || m?.role === "assistant") && typeof m.content === "string" && m.content.trim()).map((m) => ({ role: m.role, content: String(m.content).slice(0, 20000) }))
+    : [];
+  if (!turns.length || turns[turns.length - 1]!.role !== "user") {
+    res.status(400).json({ error: "Ask a question" });
+    return;
+  }
+  const j = judgment && typeof judgment.title === "string" ? judgment : undefined;
+  try {
+    res.json(await judgmentChat(turns, j));
+  } catch (e) {
+    req.log?.error({ err: e }, "Judgment chat failed");
+    res.status(502).json({ error: "The AI could not answer right now. Try again shortly." });
   }
 });
 

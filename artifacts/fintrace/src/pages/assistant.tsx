@@ -10,6 +10,7 @@ import { fdatetime, human, errMsg } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { downloadFile } from "@/lib/download";
+import { JudgmentChat } from "@/components/judgment-chat";
 
 const PROMPTS = ["Which credits above ₹2 lakh are still unclassified?", "Summarise cash deposits by financial year.", "What explains the largest asset acquired in the check period?", "Which family members have no documented income?"];
 
@@ -134,21 +135,47 @@ function CaseChat({ caseId }: { caseId: number }) {
   return <Body key={caseId} c={q.data} />;
 }
 
+type Mode = "case" | "judgments";
+const MODES: { v: Mode; label: string }[] = [{ v: "case", label: "Case records" }, { v: "judgments", label: "Court judgments (internet)" }];
+const JUDGMENT_PROMPTS = ["Latest Karnataka Lokayukta judgments this month", "Supreme Court rulings on burden of proof in DA cases", "How do courts compute disproportionate assets percentage?", "Recent High Court judgments on Section 13(1)(b) PC Act"];
+
+function JudgmentResearch() {
+  return (
+    <div className="grid lg:grid-cols-[1fr_280px] gap-5">
+      <div className="min-w-0 rounded-lg border bg-card shadow-xs flex flex-col h-[calc(100dvh-260px)] min-h-[460px]">
+        <JudgmentChat prompts={JUDGMENT_PROMPTS} className="flex-1" />
+      </div>
+      <div className="space-y-3">
+        <Notice tone="teal">Answers search the internet for court judgments, including recent ones, and list their sources. Ask follow-up questions in the same chat.</Notice>
+        <Notice>Research leads only — open the sources and check the official judgment before relying on an answer.</Notice>
+      </div>
+    </div>
+  );
+}
+
 export default function Assistant() {
   const params = useParams<{ caseId?: string }>();
   const [, nav] = useLocation();
   const cases = useListCases();
   const caseId = Number(params.caseId) || cases.data?.[0]?.id;
+  const [mode, setModeState] = useState<Mode>(() => (localStorage.getItem("assistant-mode") === "judgments" ? "judgments" : "case"));
+  const setMode = (v: Mode) => { setModeState(v); localStorage.setItem("assistant-mode", v); };
 
   return (
     <div>
-      <PageHeader eyebrow="AI" title="AI Assistant" description="Ask questions in plain language about a case's documents, transactions and records."
-        actions={!!cases.data?.length && (
+      <PageHeader eyebrow="AI" title="AI Assistant" description="Ask questions in plain language about a case's records, or about court judgments using the internet."
+        actions={mode === "case" && !!cases.data?.length && (
           <select className={cn(nativeSelect, "min-w-64")} value={caseId ?? ""} onChange={(e) => nav(`/assistant/${e.target.value}`)} data-testid="select-assistant-case">
             {cases.data.map((x) => <option key={x.id} value={x.id}>{x.title}{x.subjectName ? ` — ${x.subjectName}` : ""}</option>)}
           </select>
         )} />
-      {cases.isLoading ? <LoadingRows /> : cases.isError ? <ErrorState error={cases.error} onRetry={() => cases.refetch()} />
+      <div className="inline-flex rounded-md border p-0.5 bg-muted/40 mb-4" role="tablist">
+        {MODES.map((m) => (
+          <button key={m.v} type="button" role="tab" aria-selected={mode === m.v} onClick={() => setMode(m.v)} data-testid={`tab-assistant-${m.v}`}
+            className={cn("px-3 py-1 text-sm rounded font-medium", mode === m.v ? "bg-card shadow-xs text-primary" : "text-muted-foreground hover:text-foreground")}>{m.label}</button>
+        ))}
+      </div>
+      {mode === "judgments" ? <JudgmentResearch /> : cases.isLoading ? <LoadingRows /> : cases.isError ? <ErrorState error={cases.error} onRetry={() => cases.refetch()} />
         : !caseId ? <EmptyState icon={<Bot className="h-6 w-6" />} title="No cases yet" body={<>Create a case and upload documents, then ask questions here. <Link href="/cases" className="underline">Go to cases</Link></>} />
         : <CaseChat caseId={caseId} />}
     </div>

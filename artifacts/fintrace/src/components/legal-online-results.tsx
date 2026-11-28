@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Globe, ExternalLink, Plus, Loader2, Check } from "lucide-react";
 import { useCreateLegalReference } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/common";
 import { useToast } from "@/hooks/use-toast";
 import { errMsg } from "@/lib/format";
+import { AskAiButton } from "@/components/judgment-chat";
 
 type OnlineJudgment = { title: string; court: string | null; date: string | null; url: string; summary: string | null };
 
@@ -17,17 +18,26 @@ export function LegalOnlineResults({ query, onAdded }: { query: string; onAdded:
   const q = query.trim();
   const kanoon = `https://indiankanoon.org/search/?formInput=${encodeURIComponent(`${q} sortby: mostrecent`)}`;
 
-  const run = async () => {
-    setState({ loading: true, q });
+  const latest = useRef("");
+  const run = async (term: string) => {
+    latest.current = term;
+    setState({ loading: true, q: term });
     try {
-      const res = await fetch(`/api/legal-online-search?q=${encodeURIComponent(q)}`, { credentials: "include" });
+      const res = await fetch(`${import.meta.env.BASE_URL}api/legal-online-search?q=${encodeURIComponent(term)}`, { credentials: "include" });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? "Search failed");
-      setState({ loading: false, q, results: body.results });
+      if (latest.current === term) setState({ loading: false, q: term, results: body.results });
     } catch (e) {
-      setState({ loading: false, q, error: errMsg(e) });
+      if (latest.current === term) setState({ loading: false, q: term, error: errMsg(e) });
     }
   };
+
+  // Search runs by itself once the user stops typing.
+  useEffect(() => {
+    if (q.length < 3) { latest.current = ""; setState({ loading: false }); return; }
+    const t = setTimeout(() => run(q), 1000);
+    return () => clearTimeout(t);
+  }, [q]);
 
   const add = (r: OnlineJudgment) =>
     cr.mutate(
@@ -40,11 +50,11 @@ export function LegalOnlineResults({ query, onAdded }: { query: string; onAdded:
     <Panel className="mt-6" title="Latest judgments online" description="Live web search, newest first, including recent days. Research leads only: verify before citing."
       actions={<div className="flex gap-2">
         <Button variant="outline" size="sm" asChild><a href={kanoon} target="_blank" rel="noreferrer"><ExternalLink />Indian Kanoon (newest)</a></Button>
-        <Button size="sm" onClick={run} disabled={state.loading} data-testid="button-search-online">{state.loading ? <Loader2 className="animate-spin" /> : <Globe />}Search online</Button>
+        <Button size="sm" onClick={() => run(q)} disabled={state.loading} data-testid="button-search-online">{state.loading ? <Loader2 className="animate-spin" /> : <Globe />}Refresh</Button>
       </div>}>
       {state.loading ? <p className="text-sm text-muted-foreground">Searching the web for “{state.q}”… this can take up to a minute.</p>
         : state.error ? <p className="text-sm text-destructive">{state.error}</p>
-        : !state.results ? <p className="text-sm text-muted-foreground">Click “Search online” to find all judgments for “{q}”, including the latest ones.</p>
+        : !state.results ? <p className="text-sm text-muted-foreground">Searching for “{q}” shortly…</p>
         : !state.results.length ? <p className="text-sm text-muted-foreground">No judgments found online for “{state.q}”.</p>
         : <ul className="divide-y" data-testid="online-results">{state.results.map((r) => (
           <li key={r.url} className="py-3 flex gap-3 items-start">
@@ -53,9 +63,12 @@ export function LegalOnlineResults({ query, onAdded }: { query: string; onAdded:
               <div className="text-xs text-muted-foreground">{[r.court, r.date].filter(Boolean).join(" · ")}</div>
               {r.summary && <p className="text-sm mt-1">{r.summary}</p>}
             </div>
+            <div className="flex flex-col items-end">
+            <AskAiButton judgment={r} />
             <Button size="sm" variant="ghost" disabled={added.has(r.url) || cr.isPending} onClick={() => add(r)}>
               {added.has(r.url) ? <><Check />Added</> : <><Plus />Add to library</>}
             </Button>
+            </div>
           </li>
         ))}</ul>}
     </Panel>

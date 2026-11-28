@@ -3,6 +3,7 @@ import { ExternalLink } from "lucide-react";
 import type { LegalReference } from "@workspace/api-client-react";
 import { Tag, VerificationBadge } from "@/components/common";
 import { fdate, human } from "@/lib/format";
+import { AskAiButton } from "@/components/judgment-chat";
 
 export function LegalCard({ r, actions, footer }: { r: LegalReference; actions?: ReactNode; footer?: ReactNode }) {
   return (
@@ -21,6 +22,7 @@ export function LegalCard({ r, actions, footer }: { r: LegalReference; actions?:
       {r.subsequentTreatment && <div className="text-xs mt-1"><b>Subsequent treatment:</b> {r.subsequentTreatment}</div>}
       <div className="flex flex-wrap items-center gap-1 mt-2">
         {r.categories.map((c) => <Tag key={c}>{human(c)}</Tag>)}
+        <AskAiButton judgment={{ title: r.title, court: r.court, date: r.decisionDate, url: r.sourceUrl, summary: r.summary ?? r.legalIssue }} />
         {r.sourceUrl && <a href={r.sourceUrl} target="_blank" rel="noreferrer" className="text-xs text-primary inline-flex items-center gap-1 ml-auto hover:underline">Source<ExternalLink className="h-3 w-3" /></a>}
       </div>
       {r.verificationStatus !== "unverified" && (r.verifiedBy || r.verificationNote) && <div className="text-[11px] text-muted-foreground mt-2 border-t pt-2">{human(r.verificationStatus)} by {r.verifiedBy ?? "—"} {r.verifiedAt ? `on ${fdate(r.verifiedAt)}` : ""}{r.verificationNote ? ` — ${r.verificationNote}` : ""}</div>}
