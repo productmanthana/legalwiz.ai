@@ -3,6 +3,7 @@ import type { PagePassage } from "./assistantContext";
 import { round2 } from "./finance";
 import { fuzzyNameMatch, parseStoredRows, searchRows, sumRows, type RowQuery, type SearchQuery } from "./statementRows";
 import { buildStatementTables, type StatementTables } from "./statementTables";
+import { searchDocuments, type DocSearchQuery } from "./documentSearch";
 
 const strList = { type: "array", items: { type: "string" } };
 
@@ -57,6 +58,22 @@ export function assistantTools(passages: PagePassage[], ledger: LedgerTxn[] = []
           note: "Ledger transactions may be the same entries as statement rows (imported from the same statement): match them by date and amount and never add both.",
         };
       },
+    },
+    {
+      name: "search_documents",
+      description:
+        `Searches the COMPLETE text of every page of every uploaded document (${passages.length} pages) — sale deeds, salary slips, pension papers, ITRs, FIR/charge sheets, statements — for lines matching ANY keyword (tolerates OCR misspellings; pass names, survey numbers, account numbers, amounts and their variants). ` +
+        "Returns every hit with document, page and surrounding lines, and which documents had no hit. Use it before saying something is not in the documents.",
+      parameters: {
+        type: "object",
+        properties: {
+          includeAny: strList,
+          documentIds: { type: "array", items: { type: "integer" } },
+          contextLines: { type: "integer", description: "Lines of context around each hit (default 2, max 10)" },
+        },
+        required: ["includeAny"],
+      },
+      run: (args) => searchDocuments(passages, args as DocSearchQuery),
     },
     {
       name: "sum_statement_rows",

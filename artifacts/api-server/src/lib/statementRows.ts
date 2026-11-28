@@ -253,8 +253,10 @@ export function fuzzyNameMatch(text: string, keyword: string): boolean {
   return false;
 }
 
-/** Narrations that carry no party name (cheque clearing, IMPS/UPI codes, bare numbers). */
-const UNNAMED = /^(by\s+inst|ey\s+inst|.*micr|imps|upi|\d[\d/ -]*$|by\s+clg|clg|by\s+chq|chq)/i;
+/** Bank codes that are not a party's name. */
+const CODE_WORDS = new Set(["by", "ey", "to", "inst", "micr", "out", "imps", "impsab", "ubino", "ubin0", "upi", "upiab", "clg", "chq", "cheque", "neft", "rtgs", "cr", "dr", "trf", "ac", "a/c"]);
+/** Narrations that carry no party name (cheque clearing, IMPS/UPI codes, bare numbers or references). */
+const isUnnamed = (p: string) => !/\bcash\b/i.test(p) && !p.toLowerCase().split(/[^a-z]+/).some((w) => w.length >= 4 && !CODE_WORDS.has(w));
 
 const monthsBetween = (a: string, b: string) => (Number(b.slice(0, 4)) - Number(a.slice(0, 4))) * 12 + Number(b.slice(5, 7)) - Number(a.slice(5, 7));
 
@@ -286,8 +288,8 @@ export function searchRows(rows: StoredRow[], q: SearchQuery) {
   if (inc.length && matched.length) {
     const keys = new Set(matched.map((r) => `${r.documentId}:${r.no}`));
     for (const r of rows) {
-      if (!isTxn(r) || !r.isoDate || keys.has(`${r.documentId}:${r.no}`) || !UNNAMED.test(r.particulars.trim())) continue;
-      const near = matched.filter((m) => m.isoDate && Math.abs(monthsBetween(m.isoDate, r.isoDate!)) <= 12);
+      if (!isTxn(r) || !r.isoDate || keys.has(`${r.documentId}:${r.no}`) || !isUnnamed(r.particulars)) continue;
+      const near = matched.filter((m) => m.isoDate && Math.abs(monthsBetween(m.isoDate, r.isoDate!)) <= 24);
       const col = r.credit ? "credit" : "debit";
       if (near.some((m) => m[col] && Math.abs(m[col]! - r[col]!) <= m[col]! * 0.3)) related.push(r);
     }
@@ -307,7 +309,7 @@ export function searchRows(rows: StoredRow[], q: SearchQuery) {
       count: related.length,
       totalDebit: round2(related.reduce((s, r) => s + (r.debit ?? 0), 0)),
       totalCredit: round2(related.reduce((s, r) => s + (r.credit ?? 0), 0)),
-      note: "These narrations carry no party name (cheque clearing, IMPS/UPI). They fall within 12 months of a named entry and are of similar amount, so they MAY be from the same party. The statement cannot confirm the payer: list them separately and never add them to the named total.",
+      note: "These narrations carry no party name (cheque clearing, IMPS/UPI). They fall within 24 months of a named entry and are of similar amount, so they MAY be from the same party. The statement cannot confirm the payer: list them separately and never add them to the named total.",
       rows: related.slice(0, 300).map(view),
     },
   };
